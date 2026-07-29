@@ -161,9 +161,12 @@ class FeedAppearanceSettingsRepository(
         timeFormat = getTimeFormat(),
     )
 
+    // runCatching, not valueOf: a stored order this build does not know about must not be fatal.
+    // MOST_RELEVANT only exists in AI-capable builds, so a bare valueOf turns switching back to a
+    // build without it into a crash on every launch, unrecoverable without clearing app data.
     fun getFeedOrder(): FeedOrder =
         settings.getString(FeedAppearanceSettingsFields.FEED_ORDER.name, FeedOrder.NEWEST_FIRST.name)
-            .let { FeedOrder.valueOf(it) }
+            .let { stored -> runCatching { FeedOrder.valueOf(stored) }.getOrDefault(FeedOrder.NEWEST_FIRST) }
 
     fun setFeedOrder(order: FeedOrder) {
         settings[FeedAppearanceSettingsFields.FEED_ORDER.name] = order.name

@@ -1,7 +1,6 @@
 package com.prof18.feedflow.shared.data
 
 import com.prof18.feedflow.core.model.AiConfig
-import com.prof18.feedflow.core.model.DEFAULT_AI_BASE_URL
 import com.prof18.feedflow.core.model.DEFAULT_AI_MODEL
 import com.prof18.feedflow.core.utils.DispatcherProvider
 import com.russhwolf.settings.Settings
@@ -51,7 +50,11 @@ class AiSettingsRepository(
         mutableIsAiEnabled.update { enabled }
     }
 
-    fun getApiKey(): String? = apiKeyStorage.getApiKey()
+    /**
+     * Suspending because the first read builds the Keystore-backed store, which costs tens of
+     * milliseconds. Callers reach this from the timeline, so it must not land on the main thread.
+     */
+    suspend fun getApiKey(): String? = withContext(dispatcherProvider.io) { apiKeyStorage.getApiKey() }
 
     /**
      * Suspending because the write is encrypted, which is real work on the calling thread.
@@ -80,39 +83,25 @@ class AiSettingsRepository(
         settings[MODEL_KEY] = model
     }
 
-    fun getBaseUrl(): String = settings.readOrDefault(BASE_URL_KEY, DEFAULT_AI_BASE_URL)
-
-    fun setBaseUrl(baseUrl: String) {
-        settings[BASE_URL_KEY] = baseUrl
-    }
-
     fun getRelevanceSignature(): String = settings.getString(RELEVANCE_SIGNATURE_KEY, "")
 
     fun setRelevanceSignature(signature: String) {
         settings[RELEVANCE_SIGNATURE_KEY] = signature
     }
 
-    /**
-     * Suspending because reading the key builds the Keystore-backed store on first use, and every
-     * request would otherwise pay for that on whichever thread happens to call it.
-     */
-    suspend fun aiConfig(): AiConfig = withContext(dispatcherProvider.io) {
-        AiConfig(
-            apiKey = getApiKey(),
-            model = getModel(),
-            baseUrl = getBaseUrl(),
-        )
-    }
+    suspend fun aiConfig(): AiConfig = AiConfig(
+        apiKey = getApiKey(),
+        model = getModel(),
+    )
 
     // Clearing a field in the UI stores "", which must fall back to the default rather than
-    // building a request against an empty model or host.
+    // building a request against an empty model.
     private fun Settings.readOrDefault(key: String, default: String): String =
         getString(key, default).ifBlank { default }
 
     private companion object {
         const val SYSTEM_PROMPT_KEY = "ai_system_prompt"
         const val MODEL_KEY = "ai_model"
-        const val BASE_URL_KEY = "ai_base_url"
         const val RELEVANCE_SIGNATURE_KEY = "ai_relevance_signature"
         const val HAS_API_KEY_KEY = "ai_has_api_key"
         const val AI_ENABLED_KEY = "ai_enabled"

@@ -3,6 +3,9 @@ package com.prof18.feedflow.shared.data
 import com.prof18.feedflow.core.model.MAX_REQUEST_INPUT_LENGTH
 import com.prof18.feedflow.database.UnscoredItem
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -84,5 +87,24 @@ class ArticleRelevanceRepositoryTest {
         listOf("90-100", "70-89", "40-69", "10-39", "0-9").forEach { band ->
             assertTrue(RELEVANCE_SYSTEM_PROMPT.contains(band), "missing band $band")
         }
+    }
+
+    // The schema is what makes a reply parseScores cannot read impossible, so a typo in it would
+    // quietly hand that job back to the prompt and reintroduce the unscored-and-rebilled loop.
+    @Test
+    fun `response schema describes the array of index and score objects the parser expects`() {
+        val schema = json.parseToJsonElement(RELEVANCE_RESPONSE_SCHEMA).jsonObject
+
+        assertEquals("ARRAY", schema.getValue("type").jsonPrimitive.content)
+        val item = schema.getValue("items").jsonObject
+        assertEquals("OBJECT", item.getValue("type").jsonPrimitive.content)
+        assertEquals(setOf("i", "s"), item.getValue("properties").jsonObject.keys)
+        item.getValue("properties").jsonObject.values.forEach {
+            assertEquals("INTEGER", it.jsonObject.getValue("type").jsonPrimitive.content)
+        }
+        assertEquals(
+            listOf("i", "s"),
+            item.getValue("required").jsonArray.map { it.jsonPrimitive.content },
+        )
     }
 }

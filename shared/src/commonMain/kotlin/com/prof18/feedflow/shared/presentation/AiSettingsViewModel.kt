@@ -5,7 +5,6 @@ import androidx.lifecycle.viewModelScope
 import com.prof18.feedflow.core.model.AiSummaryError
 import com.prof18.feedflow.core.model.AiSummaryException
 import com.prof18.feedflow.core.model.ArticleAiService
-import com.prof18.feedflow.core.utils.DispatcherProvider
 import com.prof18.feedflow.shared.data.AiSettingsRepository
 import com.prof18.feedflow.shared.data.FeedAppearanceSettingsRepository
 import kotlinx.coroutines.Job
@@ -15,7 +14,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 sealed interface AiTestState {
     data object Idle : AiTestState
@@ -27,7 +25,6 @@ sealed interface AiTestState {
 data class AiSettingsState(
     val apiKey: String,
     val model: String,
-    val baseUrl: String,
     val systemPrompt: String,
     val isAiEnabled: Boolean = false,
     val hasKeyStorageFailed: Boolean = false,
@@ -37,14 +34,12 @@ class AiSettingsViewModel(
     private val aiSettingsRepository: AiSettingsRepository,
     private val articleAiService: ArticleAiService,
     private val feedAppearanceSettingsRepository: FeedAppearanceSettingsRepository,
-    private val dispatcherProvider: DispatcherProvider,
 ) : ViewModel() {
 
     private val mutableSettingsState = MutableStateFlow(
         AiSettingsState(
             apiKey = "",
             model = aiSettingsRepository.getModel(),
-            baseUrl = aiSettingsRepository.getBaseUrl(),
             systemPrompt = aiSettingsRepository.getSystemPrompt(),
             isAiEnabled = aiSettingsRepository.isAiEnabled.value,
         ),
@@ -52,9 +47,8 @@ class AiSettingsViewModel(
     val settingsState: StateFlow<AiSettingsState> = mutableSettingsState.asStateFlow()
 
     init {
-        // Off the main thread: reading the key builds the Keystore-backed store on first use.
         viewModelScope.launch {
-            val storedKey = withContext(dispatcherProvider.io) { aiSettingsRepository.getApiKey() }
+            val storedKey = aiSettingsRepository.getApiKey()
             mutableSettingsState.update { it.copy(apiKey = storedKey.orEmpty()) }
         }
     }
@@ -95,12 +89,6 @@ class AiSettingsViewModel(
         mutableTestState.update { AiTestState.Idle }
     }
 
-    fun updateBaseUrl(baseUrl: String) {
-        aiSettingsRepository.setBaseUrl(baseUrl)
-        mutableSettingsState.update { it.copy(baseUrl = baseUrl) }
-        mutableTestState.update { AiTestState.Idle }
-    }
-
     fun updateSystemPrompt(prompt: String) {
         aiSettingsRepository.setSystemPrompt(prompt)
         mutableSettingsState.update { it.copy(systemPrompt = prompt) }
@@ -114,17 +102,23 @@ class AiSettingsViewModel(
 
         mutableTestState.update { AiTestState.Testing }
         viewModelScope.launch {
-            mutableTestState.update {
-                try {
-                    articleAiService.complete(
-                        systemPrompt = settingsState.value.systemPrompt,
-                        input = TEST_ARTICLE_TEXT,
-                    )
-                    AiTestState.Success
-                } catch (e: AiSummaryException) {
-                    AiTestState.Error(e)
-                }
+            // The field is the source of truth for the user, but the service reads the key back
+            // out of storage. Without waiting for the pending write, testing a freshly pasted key
+            // checks whatever the keystore still holds and reports a failure that is not real.
+            apiKeyWriteJob?.join()
+            // Assigned, never `update {}`: that is a compare-and-set retry loop, and a concurrent
+            // edit to any other field resets this flow to Idle, fails the CAS, and re-runs the
+            // block. A second billed request per tap is not an acceptable way to lose a race.
+            val result = try {
+                articleAiService.complete(
+                    systemPrompt = settingsState.value.systemPrompt,
+                    input = TEST_ARTICLE_TEXT,
+                )
+                AiTestState.Success
+            } catch (e: AiSummaryException) {
+                AiTestState.Error(e)
             }
+            mutableTestState.value = result
         }
     }
 

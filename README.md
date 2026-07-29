@@ -28,7 +28,7 @@
 
 > [!NOTE]
 > This repository is a fork of the original [FeedFlow](https://github.com/prof18/feed-flow) project by [Marco Gomiero (prof18)](https://github.com/prof18).  
-> It enhances the official FeedFlow app with **AI-powered Article Summarisation** and **Relevance Ranking**.
+> It enhances the official FeedFlow app with **AI-powered Article Summarisation** and **Relevance Ranking**, powered by Google Gemini with your own API key.
 
 ![FeedFlow banner](assets/banners.png)
 
@@ -47,7 +47,7 @@
 - Offline reading by saving article content during sync
 - Timeline, read status, bookmark, source, and category filters
 - Blocked words to hide articles containing specific keywords or phrases
-- AI article summaries and AI relevance ranking (Most Relevant feed order)
+- AI article summaries and AI relevance ranking via Google Gemini (Most Relevant feed order), Android only
 - Curated feed suggestions across different topics
 - Theme modes for system, light, dark, and OLED
 - Widgets for Android and iOS
@@ -84,39 +84,35 @@ FeedFlow also supports auto-saving article content for offline reading and inclu
 
 Reader Mode can generate a summary of the article you are reading. The summary appears as a
 collapsible card in the article itself, just above the body text, and scrolls with the rest of
-the page. FeedFlow also supports AI relevance ranking and "Most Relevant" feed ordering to bring high-interest articles to the top of your timeline. Nothing is sent anywhere until requested, and summary results are cached locally so reopening an article costs nothing.
+the page. FeedFlow also supports AI relevance ranking and "Most Relevant" feed ordering to bring
+high-interest articles to the top of your timeline. Nothing is sent anywhere until requested, and
+summary results are cached locally so reopening an article costs nothing.
 
-This feature uses your own API key. FeedFlow ships no key and adds no service of its own.
+This feature uses your own [Google Gemini](https://ai.google.dev) key. FeedFlow ships no key and
+adds no service of its own. Gemini is the only supported provider: requests go straight to the
+native `generateContent` API rather than through a compatibility shim, which is what lets relevance
+scoring use a response schema so a malformed reply cannot happen.
 
-Requests use the OpenAI chat completions format, so any provider speaking it works: Gemini (the
-default), OpenAI, Anthropic, Groq, OpenRouter or Together. Point the **API endpoint** at the
-provider and set **Model** to one it serves.
+**Setup:** get a key from [Google AI Studio](https://aistudio.google.com/apikey), then open
+**Settings → AI** and paste it in. The key is stored encrypted on device and never leaves except
+in direct requests to Gemini.
 
-**Setup:** Get a key from [Google AI Studio](https://aistudio.google.com/apikey) — or from another
-provider — then open **Settings → AI Features** and paste it in. The key is stored securely on
-device and never leaves except in direct requests to the configured API endpoint.
-
-| Provider | API endpoint | Example model |
-| --- | --- | --- |
-| Gemini (default) | `https://generativelanguage.googleapis.com/v1beta/openai/` | `gemini-3.5-flash-lite` |
-| OpenAI | `https://api.openai.com/v1` | `gpt-4o-mini` |
-| Anthropic | `https://api.anthropic.com/v1` | `claude-haiku-4-5` |
-| Groq | `https://api.groq.com/openai/v1` | `llama-3.3-70b-versatile` |
-| OpenRouter | `https://openrouter.ai/api/v1` | `google/gemini-2.5-flash` |
-
-The AI settings screen also exposes:
+The AI settings screen exposes:
 
 | Setting | What it does |
 | --- | --- |
-| AI Toggle | Easily enable or disable AI features (summarisation and relevance ranking). |
-| Model | Which model to call. Defaults to `gemini-3.5-flash-lite`. |
-| API endpoint | The base URL requests go to. Defaults to Gemini's OpenAI-compatible endpoint. Any OpenAI-compatible provider, proxy, or self-hosted gateway works; `/chat/completions` is appended when the URL does not already end with it. |
-| System prompt | The instruction the model is given. Edit it to change the summary's length, tone, or language. |
-| Test Connection | Sends one short request so you can confirm the key, model, and endpoint work before relying on them. |
+| Enable AI features | Turns summarisation and relevance ranking on or off. Off by default; while off, the summary card is absent from the reader page entirely and "Most Relevant" does not appear in any sort menu. |
+| API key | Your Gemini key. One key covers both summaries and relevance ranking. |
+| Model | Which Gemini model to call. Defaults to `gemini-3.5-flash-lite`; `gemini-3.5-flash` and `gemini-3.1-flash-lite` also work. Leave it empty to restore the default. |
+| Summary prompt | The instruction the model is given. Edit it to change the summary's length, tone, or language. |
+| Test Connection | Sends one short request so you can confirm the key and model work before relying on them. |
 
-Leaving Model or API endpoint empty restores its default. Changing either invalidates cached
-summaries, so the next article is summarised with the new settings rather than replaying an old
-result.
+Changing the model invalidates cached summaries, so the next article is summarised with the new
+settings rather than replaying an old result. It also discards existing relevance scores, because
+two models do not share a scale and mixing them would sort articles against numbers that mean
+different things.
+
+AI features are currently Android-only. iOS and Desktop have no AI UI.
 
 ### Discover New Feeds Faster
 

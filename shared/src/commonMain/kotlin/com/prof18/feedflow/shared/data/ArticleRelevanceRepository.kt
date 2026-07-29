@@ -25,15 +25,24 @@ import kotlinx.serialization.json.jsonPrimitive
 // model is given an absolute rubric to keep separate batches roughly comparable.
 internal val RELEVANCE_SYSTEM_PROMPT = """
     You rate how newsworthy each headline is. You are given a numbered list of articles.
-    Reply with a JSON array of objects, one for every index you were given, in the form
-    [{"i": <index>, "s": <score>}]. Score 0 to 100 using this rubric:
+    Reply with one object for every index you were given, where "i" is the index and "s" is the
+    score. Score 0 to 100 using this rubric:
     90-100 major breaking news with wide consequence.
     70-89 significant national, international or industry news.
     40-69 routine reporting, incremental updates, opinion.
     10-39 minor items, listicles, deals, roundups.
     0-9 promotional, trivial or purely personal content.
-    Judge the article, not the writing style. Return no prose and no markdown.
+    Judge the article, not the writing style.
 """.trimIndent().replace("\n", " ")
+
+// Sent as the model's response schema, so a reply that is not this shape is impossible rather
+// than something to recover from. Without it a prose refusal parses to zero scores, leaves every
+// item unscored, and is paid for again on the next refresh.
+internal const val RELEVANCE_RESPONSE_SCHEMA = """
+    {"type":"ARRAY","items":{"type":"OBJECT",
+    "properties":{"i":{"type":"INTEGER"},"s":{"type":"INTEGER"}},
+    "required":["i","s"]}}
+"""
 
 class ArticleRelevanceRepository(
     private val databaseHelper: DatabaseHelper,
@@ -79,9 +88,10 @@ class ArticleRelevanceRepository(
     }
 
     private suspend fun scoreUnscoredItems(feedFilter: FeedFilter, showReadItems: Boolean): Boolean {
-        discardScoresFromAnotherModel()
-
-        var wroteAny = false
+        // Counts as a change on its own: the visible list and the pagination cursor are still
+        // ordered by scores that no longer exist, so the caller has to re-publish even if every
+        // request below then fails.
+        var wroteAny = discardScoresFromAnotherModel()
         val items = databaseHelper.getUnscoredItems(
             feedFilter = feedFilter,
             showReadItems = showReadItems,
@@ -110,24 +120,31 @@ class ArticleRelevanceRepository(
         val reply = articleAiService.complete(
             systemPrompt = RELEVANCE_SYSTEM_PROMPT,
             input = prompt,
+            responseSchema = RELEVANCE_RESPONSE_SCHEMA,
         )
         return parseScores(reply, batch, json)
     }
 
-    // The model has no way to know the previous model's scale, so mixing them would sort
-    // articles against numbers that mean different things.
-    private suspend fun discardScoresFromAnotherModel() {
+    /**
+     * The model has no way to know the previous model's scale, so mixing them would sort articles
+     * against numbers that mean different things.
+     *
+     * @return true when scores were actually discarded.
+     */
+    private suspend fun discardScoresFromAnotherModel(): Boolean {
         val signature = "${aiSettingsRepository.getModel()}|$RUBRIC_VERSION"
-        if (aiSettingsRepository.getRelevanceSignature() == signature) return
+        if (aiSettingsRepository.getRelevanceSignature() == signature) return false
         databaseHelper.clearRelevanceScores()
         aiSettingsRepository.setRelevanceSignature(signature)
+        return true
     }
 
     private companion object {
         const val MAX_ITEMS_PER_RUN = 200L
 
         // Bump when RELEVANCE_SYSTEM_PROMPT changes in a way that shifts the scale.
-        const val RUBRIC_VERSION = 1
+        // 2: moved to the native Gemini endpoint with a response schema and a thinking level.
+        const val RUBRIC_VERSION = 2
     }
 }
 
@@ -159,8 +176,8 @@ internal fun batchesUnderPromptBudget(items: List<UnscoredItem>): List<List<Unsc
             current = mutableListOf()
             length = 0
         }
-        // Re-measured after a flush: the index is part of the line, so a line's cost depends on
-        // which batch it lands in.
+        // Measured after the flush, not before it: the index is part of the line, so the same
+        // item costs fewer characters once it is first in a fresh batch.
         length += promptLine(current.size, item).length + 1
         current += item
     }

@@ -11,14 +11,13 @@ class ArticleSummaryRepository(
 ) {
     suspend fun summarise(articleId: String, articleHtml: String): String {
         val model = aiSettingsRepository.getModel()
-        val endpoint = aiSettingsRepository.getBaseUrl()
         val systemPrompt = aiSettingsRepository.getSystemPrompt()
         // Truncated here rather than in the service: this is the article-length limit, and it has
         // to be applied before the hash or the cache key would not describe what was sent.
         val articleText = htmlToPlainText(articleHtml).take(MAX_ARTICLE_TEXT_LENGTH)
-        // Endpoint, model and prompt are all part of the key so changing any of them produces a
-        // fresh summary instead of replaying one another provider wrote.
-        val contentHash = contentHash(endpoint, model, systemPrompt, articleText)
+        // Model and prompt are both part of the key, so changing either produces a fresh summary
+        // instead of replaying one the previous settings wrote.
+        val contentHash = contentHash(model, systemPrompt, articleText)
 
         databaseHelper.getArticleSummary(contentHash)?.let { return it }
 
@@ -38,13 +37,14 @@ private val htmlTagRegex = Regex("<[^>]*>")
 private val whitespaceRegex = Regex("\\s+")
 private val numericEntityRegex = Regex("&#(x?)([0-9a-fA-F]+);")
 
-// The named five that actually survive tag stripping; anything rarer is left alone rather than
-// shipping an entity table for a summariser input.
+// The named few that actually survive tag stripping; anything rarer is left alone rather than
+// shipping an entity table for a summariser input. Numeric forms such as &#39; need no entry:
+// numericEntityRegex has already decoded them by the time this map is applied.
 private val namedEntities = mapOf(
     "&lt;" to "<",
     "&gt;" to ">",
     "&quot;" to "\"",
-    "&#39;" to "'",
+    "&apos;" to "'",
     "&nbsp;" to " ",
 )
 

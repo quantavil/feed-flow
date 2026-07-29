@@ -36,7 +36,6 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.prof18.feedflow.android.settings.SettingsE2eIds
-import com.prof18.feedflow.core.model.DEFAULT_AI_BASE_URL
 import com.prof18.feedflow.core.model.DEFAULT_AI_MODEL
 import com.prof18.feedflow.shared.presentation.AiSettingsState
 import com.prof18.feedflow.shared.presentation.AiSettingsViewModel
@@ -60,7 +59,6 @@ internal fun AiSettingsScreen(
             onAiEnabledChange = viewModel::setAiEnabled,
             onApiKeyChange = viewModel::updateApiKey,
             onModelChange = viewModel::updateModel,
-            onBaseUrlChange = viewModel::updateBaseUrl,
             onSystemPromptChange = viewModel::updateSystemPrompt,
             onTestConnection = viewModel::testConnection,
             navigateBack = navigateBack,
@@ -173,16 +171,6 @@ private fun AiSettingsScreenContent(
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
             )
 
-            OutlinedTextField(
-                value = settings.baseUrl,
-                onValueChange = callbacks.onBaseUrlChange,
-                label = { Text(strings.settingsAiBaseUrl) },
-                supportingText = { Text(strings.settingsAiBaseUrlHint(DEFAULT_AI_BASE_URL)) },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-            )
-
             Button(
                 onClick = callbacks.onTestConnection,
                 enabled = settings.apiKey.isNotBlank() && testState !is AiTestState.Testing,
@@ -242,7 +230,6 @@ private data class AiSettingsCallbacks(
     val onAiEnabledChange: (Boolean) -> Unit,
     val onApiKeyChange: (String) -> Unit,
     val onModelChange: (String) -> Unit,
-    val onBaseUrlChange: (String) -> Unit,
     val onSystemPromptChange: (String) -> Unit,
     val onTestConnection: () -> Unit,
     val navigateBack: () -> Unit,

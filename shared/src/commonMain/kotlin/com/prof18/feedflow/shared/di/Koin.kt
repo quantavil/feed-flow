@@ -7,7 +7,7 @@ import co.touchlab.kermit.StaticConfig
 import com.prof18.feedflow.core.domain.DateFormatter
 import com.prof18.feedflow.core.domain.FeedSourceLogoRetriever
 import com.prof18.feedflow.core.model.ArticleAiService
-import com.prof18.feedflow.core.model.OpenAiCompatibleArticleAiService
+import com.prof18.feedflow.core.model.GeminiArticleAiService
 import com.prof18.feedflow.core.utils.AppConfig
 import com.prof18.feedflow.core.utils.AppEnvironment
 import com.prof18.feedflow.core.utils.DispatcherProvider
@@ -271,7 +271,7 @@ private fun getCoreModule(appConfig: AppConfig) = module {
 
     single<ArticleAiService> {
         val aiSettingsRepository = get<AiSettingsRepository>()
-        OpenAiCompatibleArticleAiService(
+        GeminiArticleAiService(
             // Not the HtmlRetriever client: that one is tuned for scraping pages (browser User-Agent,
             // Accept: text/html, Referer) and is private to it. This one only needs a request timeout.
             httpClient = HttpClient {
@@ -308,7 +308,6 @@ private fun getCoreModule(appConfig: AppConfig) = module {
             aiSettingsRepository = get(),
             articleAiService = get(),
             feedAppearanceSettingsRepository = get(),
-            dispatcherProvider = get(),
         )
     }
 
