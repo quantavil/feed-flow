@@ -45,6 +45,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import co.touchlab.kermit.Logger
 import com.multiplatform.webview.jsbridge.IJsMessageHandler
 import com.multiplatform.webview.jsbridge.JsMessage
 import com.multiplatform.webview.jsbridge.rememberWebViewJsBridge
@@ -56,16 +58,22 @@ import com.multiplatform.webview.web.rememberWebViewState
 import com.multiplatform.webview.web.rememberWebViewStateWithHTMLData
 import com.prof18.feedflow.android.BrowserManager
 import com.prof18.feedflow.android.openShareSheet
+import com.prof18.feedflow.core.model.AiSummaryException
 import com.prof18.feedflow.core.model.FeedItemId
 import com.prof18.feedflow.core.model.ReaderModeState
 import com.prof18.feedflow.core.model.ShownContentSource
 import com.prof18.feedflow.core.model.ThemeMode
+import com.prof18.feedflow.shared.data.AiSettingsRepository
+import com.prof18.feedflow.shared.data.ArticleSummaryRepository
 import com.prof18.feedflow.shared.domain.ReaderColors
 import com.prof18.feedflow.shared.domain.getReaderModeStyledHtml
+import com.prof18.feedflow.shared.domain.readerAiSummaryRenderJs
 import com.prof18.feedflow.shared.domain.readerLineHeightJs
 import com.prof18.feedflow.shared.ui.utils.LocalFeedFlowStrings
+import com.prof18.feedflow.shared.ui.utils.aiErrorMessage
 import com.prof18.feedflow.shared.utils.getArchiveISUrl
 import com.prof18.feedflow.shared.utils.isValidUrl
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import org.koin.compose.koinInject
 import kotlin.time.Duration.Companion.milliseconds
@@ -370,9 +378,15 @@ private fun ReaderMode(
     @Suppress("MagicNumber")
     val spacerHeightDp = (contentPadding.calculateTopPadding().value - 40f).toInt().coerceAtLeast(0)
 
+    val strings = LocalFeedFlowStrings.current
+    val articleContent = readerModeState.readerModeData.content
+
+    val aiSettingsRepository = koinInject<AiSettingsRepository>()
+    val isAiEnabled by aiSettingsRepository.isAiEnabled.collectAsStateWithLifecycle()
+
     val content = getReaderModeStyledHtml(
         colors = colors,
-        content = readerModeState.readerModeData.content,
+        content = articleContent,
         fontSize = readerModeState.readerModeData.fontSize,
         lineHeight = readerModeState.readerModeData.lineHeight,
         title = readerModeState.readerModeData.title.takeIf {
@@ -381,10 +395,52 @@ private fun ReaderMode(
         imageUrl = readerModeState.readerModeData.imageUrl,
         leadingContent = "<div id=\"__feedflow_top_spacer\" style=\"height: ${spacerHeightDp}px;\"></div>",
         siteName = readerModeState.readerModeData.siteName,
+        // Null omits the whole card from the page, so with AI off the reader has no trace of it.
+        aiSummaryTitle = strings.aiSummaryTitle.takeIf { isAiEnabled },
     )
+
+    val logger = koinInject<Logger>()
+    val summaryRepository = koinInject<ArticleSummaryRepository>()
+    // Reset per article so switching articles never replays a request against the new page,
+    // and so the effect below is cancelled when the loaded content changes.
+    var summaryRequestCount by remember(articleContent) { mutableIntStateOf(0) }
+    val requestSummary by rememberUpdatedState({ summaryRequestCount++ })
+
+    LaunchedEffect(articleContent, summaryRequestCount) {
+        if (summaryRequestCount == 0) return@LaunchedEffect
+        navigator.evaluateJavaScript(readerAiSummaryRenderJs("loading", strings.aiSummaryLoading))
+        // Catches more than AiSummaryException on purpose: summarise() also reads and writes the
+        // summary cache, and a SQLite failure here would otherwise escape into the reader.
+        @Suppress("TooGenericExceptionCaught")
+        val js = try {
+            val summary = summaryRepository.summarise(readerModeState.readerModeData.id.id, articleContent)
+            readerAiSummaryRenderJs("text", summary)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: AiSummaryException) {
+            readerAiSummaryRenderJs("error", strings.aiErrorMessage(e), strings.aiSummaryRetry)
+        } catch (e: Exception) {
+            logger.e(e) { "Could not build the AI summary" }
+            readerAiSummaryRenderJs("error", strings.aiSummaryGenericError, strings.aiSummaryRetry)
+        }
+        navigator.evaluateJavaScript(js)
+    }
 
     val jsBridge = rememberWebViewJsBridge()
     LaunchedEffect(jsBridge) {
+        jsBridge.register(
+            object : IJsMessageHandler {
+                override fun handle(
+                    message: JsMessage,
+                    navigator: WebViewNavigator?,
+                    callback: (String) -> Unit,
+                ) {
+                    requestSummary()
+                }
+
+                override fun methodName(): String = "aiSummary"
+            },
+        )
         jsBridge.register(
             object : IJsMessageHandler {
                 override fun handle(

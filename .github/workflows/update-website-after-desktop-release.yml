@@ -7,6 +7,8 @@ on:
 
 jobs:
   update-website:
+    # Upstream only: in the fork this fires on every APK release and edits a website nobody serves.
+    if: github.repository == 'prof18/feed-flow'
     runs-on: ubuntu-latest
     permissions:
       contents: write

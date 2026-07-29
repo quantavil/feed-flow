@@ -42,6 +42,7 @@ internal actual fun FeedItemContextMenu(
     onOpenFeedWebsite: (String) -> Unit,
     onMarkAllAboveAsRead: (String) -> Unit,
     onMarkAllBelowAsRead: (String) -> Unit,
+    canMarkAboveOrBelowAsRead: Boolean,
 ) {
     val strings = LocalFeedFlowStrings.current
     val menuEntries = buildFeedItemDesktopMenuEntries(
@@ -58,6 +59,7 @@ internal actual fun FeedItemContextMenu(
         onOpenFeedWebsite = onOpenFeedWebsite,
         onMarkAllAboveAsRead = onMarkAllAboveAsRead,
         onMarkAllBelowAsRead = onMarkAllBelowAsRead,
+        canMarkAboveOrBelowAsRead = canMarkAboveOrBelowAsRead,
     )
 
     DesktopPopupMenu(
@@ -82,6 +84,7 @@ private fun buildFeedItemDesktopMenuEntries(
     onOpenFeedWebsite: (String) -> Unit,
     onMarkAllAboveAsRead: (String) -> Unit,
     onMarkAllBelowAsRead: (String) -> Unit,
+    canMarkAboveOrBelowAsRead: Boolean,
 ): ImmutableList<DesktopPopupMenuEntry> = buildList {
     add(
         DesktopPopupMenuEntry.Action(
@@ -109,27 +112,32 @@ private fun buildFeedItemDesktopMenuEntries(
     }
 
     add(DesktopPopupMenuEntry.Divider)
-    add(
-        DesktopPopupMenuEntry.Action(
-            text = strings.menuMarkAllAboveAsRead,
-            icon = Icons.Default.KeyboardDoubleArrowUp,
-            onClick = {
-                onMarkAllAboveAsRead(feedItem.id)
-                closeMenu()
-            },
-        ),
-    )
-    add(
-        DesktopPopupMenuEntry.Action(
-            text = strings.menuMarkAllBelowAsRead,
-            icon = Icons.Default.KeyboardDoubleArrowDown,
-            onClick = {
-                onMarkAllBelowAsRead(feedItem.id)
-                closeMenu()
-            },
-        ),
-    )
-    add(DesktopPopupMenuEntry.Divider)
+
+    // "Above" and "below" are resolved by publication date, so they only match what the user
+    // sees while the list is date-ordered.
+    if (canMarkAboveOrBelowAsRead) {
+        add(
+            DesktopPopupMenuEntry.Action(
+                text = strings.menuMarkAllAboveAsRead,
+                icon = Icons.Default.KeyboardDoubleArrowUp,
+                onClick = {
+                    onMarkAllAboveAsRead(feedItem.id)
+                    closeMenu()
+                },
+            ),
+        )
+        add(
+            DesktopPopupMenuEntry.Action(
+                text = strings.menuMarkAllBelowAsRead,
+                icon = Icons.Default.KeyboardDoubleArrowDown,
+                onClick = {
+                    onMarkAllBelowAsRead(feedItem.id)
+                    closeMenu()
+                },
+            ),
+        )
+        add(DesktopPopupMenuEntry.Divider)
+    }
 
     if (feedItem.commentsUrl != null) {
         add(

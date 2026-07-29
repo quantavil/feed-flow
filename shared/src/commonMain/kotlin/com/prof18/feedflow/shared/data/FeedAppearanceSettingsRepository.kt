@@ -170,6 +170,14 @@ class FeedAppearanceSettingsRepository(
         feedOrderMutableFlow.update { order }
     }
 
+    // Turning AI off removes relevance from every picker, so a timeline left on it would be stuck
+    // on an order the user can no longer see or change.
+    fun resetRelevanceOrder() {
+        if (getFeedOrder() == FeedOrder.MOST_RELEVANT) {
+            setFeedOrder(FeedOrder.NEWEST_FIRST)
+        }
+    }
+
     fun getFeedLayout(): FeedLayout {
         val storedLayout = settings.getString(FeedAppearanceSettingsFields.FEED_LAYOUT.name, FeedLayout.LIST.name)
         if (storedLayout == FeedLayout.GRID.name) {

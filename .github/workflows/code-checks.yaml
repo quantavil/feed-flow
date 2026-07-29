@@ -10,6 +10,9 @@ on:
 
 jobs:
   checks:
+    # Upstream only. This fork ships Android, and Android CI already runs detekt and allTests;
+    # here this job would burn a macOS runner on iOS and macOS builds nothing releases.
+    if: github.repository == 'prof18/feed-flow'
     runs-on: macos-26
     timeout-minutes: 90
     steps:

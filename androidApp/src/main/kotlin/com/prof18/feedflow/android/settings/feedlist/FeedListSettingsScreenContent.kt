@@ -39,6 +39,7 @@ import com.prof18.feedflow.shared.ui.theme.FeedFlowTheme
 import com.prof18.feedflow.shared.ui.utils.LocalFeedFlowStrings
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toImmutableList
 
 @Composable
 internal fun FeedListSettingsScreenContent(
@@ -247,16 +248,30 @@ internal fun FeedListSettingsScreenContent(
                         modifier = Modifier.testTag(SettingsE2eIds.FEED_LIST_ORDER),
                         title = strings.settingsFeedOrderTitle,
                         currentValue = state.feedOrder,
-                        options = persistentListOf(
-                            SettingDropdownOption(
-                                FeedOrder.NEWEST_FIRST,
-                                strings.settingsFeedOrderNewestFirst,
-                            ),
-                            SettingDropdownOption(
-                                FeedOrder.OLDEST_FIRST,
-                                strings.settingsFeedOrderOldestFirst,
-                            ),
-                        ),
+                        options = buildList {
+                            add(
+                                SettingDropdownOption(
+                                    FeedOrder.NEWEST_FIRST,
+                                    strings.settingsFeedOrderNewestFirst,
+                                ),
+                            )
+                            add(
+                                SettingDropdownOption(
+                                    FeedOrder.OLDEST_FIRST,
+                                    strings.settingsFeedOrderOldestFirst,
+                                ),
+                            )
+                            // Omitting it while AI is off would leave this dropdown rendering
+                            // blank for anyone whose stored order is still relevance.
+                            if (state.isRelevanceSortVisible) {
+                                add(
+                                    SettingDropdownOption(
+                                        FeedOrder.MOST_RELEVANT,
+                                        strings.settingsFeedOrderMostRelevant,
+                                    ),
+                                )
+                            }
+                        }.toImmutableList(),
                         onOptionSelected = onFeedOrderSelected,
                     )
                 }

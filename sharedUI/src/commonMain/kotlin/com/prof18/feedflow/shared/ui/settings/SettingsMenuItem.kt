@@ -2,6 +2,7 @@ package com.prof18.feedflow.shared.ui.settings
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -20,6 +21,7 @@ fun SettingItem(
     title: String,
     modifier: Modifier = Modifier,
     icon: ImageVector? = null,
+    subtitle: String? = null,
     isEnabled: Boolean = true,
     onClick: () -> Unit,
 ) {
@@ -46,9 +48,18 @@ fun SettingItem(
                 contentDescription = null,
             )
         }
-        Text(
-            text = title,
-            style = MaterialTheme.typography.bodyLarge,
-        )
+        Column {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+            )
+            if (subtitle != null) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
     }
 }

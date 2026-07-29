@@ -3,6 +3,7 @@ package com.prof18.feedflow.shared.domain
 import com.prof18.feedflow.core.model.ReaderModeDefaults
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class ReaderModeHtmlAndCssTest {
@@ -102,5 +103,53 @@ class ReaderModeHtmlAndCssTest {
 
         assertTrue(html.contains("https://example.com/diagram.jpg"))
         assertTrue(!html.contains("class=\"__hero\""))
+    }
+
+    @Test
+    fun `ai summary card is omitted unless a title is provided`() {
+        val html = getReaderModeStyledHtml(
+            colors = null,
+            content = "<p>Article body</p>",
+            fontSize = 18,
+        )
+
+        // The card styles are always in the stylesheet; only the markup and its script are gated.
+        assertFalse(html.contains("id=\"__ff_ai\""))
+        assertFalse(html.contains("window.__ffAi"))
+    }
+
+    @Test
+    fun `ai summary card is inserted before the first paragraph of the content`() {
+        val html = getReaderModeStyledHtml(
+            colors = null,
+            content = "<p>Article body</p>",
+            fontSize = 18,
+            aiSummaryTitle = "AI Summary",
+        )
+
+        assertTrue(html.contains("id=\"__ff_ai\""))
+        assertTrue(html.contains("AI Summary"))
+        // The card must land next to the article text, not stay where it is declared in the body.
+        assertTrue(html.contains("anchor.parentNode.insertBefore(card, anchor)"))
+        assertTrue(html.contains("window.kmpJsBridge.callNative(\"aiSummary\""))
+    }
+
+    @Test
+    fun `ai summary render js escapes model output`() {
+        val js = readerAiSummaryRenderJs(
+            state = "text",
+            text = "He said \"hi\"\nand <script>alert(1)</script>",
+        )
+
+        assertTrue(js.contains("\\\"hi\\\""))
+        assertTrue(js.contains("\\n"))
+        // An unescaped "<" would close the inline <script> that this string is evaluated in.
+        assertFalse(js.contains("<script>"))
+        assertTrue(js.contains("\\u003Cscript"))
+    }
+
+    @Test
+    fun `ai summary render js omits the action label when there is none`() {
+        assertTrue(readerAiSummaryRenderJs("loading", "Generating summary...").endsWith(", null);"))
     }
 }

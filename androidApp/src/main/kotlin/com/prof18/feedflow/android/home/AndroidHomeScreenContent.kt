@@ -57,6 +57,7 @@ import com.prof18.feedflow.shared.ui.home.FeedListActions
 import com.prof18.feedflow.shared.ui.home.FeedManagementActions
 import com.prof18.feedflow.shared.ui.home.HomeDisplayState
 import com.prof18.feedflow.shared.ui.home.ShareBehavior
+import com.prof18.feedflow.shared.ui.home.components.ArticleRankingLoader
 import com.prof18.feedflow.shared.ui.home.components.EmptyFeedView
 import com.prof18.feedflow.shared.ui.home.components.FeedLoader
 import com.prof18.feedflow.shared.ui.home.components.NoFeedsSourceView
@@ -323,6 +324,8 @@ fun AndroidHomeScreenContent(
                     .padding(top = topInset + Spacing.small),
             ) {
                 FeedLoader(loadingState = displayState.feedUpdateStatus)
+
+                ArticleRankingLoader(isRanking = displayState.isRankingArticles)
             }
 
             HomeFloatingToolbar(

@@ -24,4 +24,5 @@ internal expect fun FeedItemContextMenu(
     onOpenFeedWebsite: (String) -> Unit,
     onMarkAllAboveAsRead: (String) -> Unit,
     onMarkAllBelowAsRead: (String) -> Unit,
+    canMarkAboveOrBelowAsRead: Boolean,
 )

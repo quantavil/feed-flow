@@ -26,6 +26,10 @@
   </p>
 </div>
 
+> [!NOTE]
+> This repository is a fork of the original [FeedFlow](https://github.com/prof18/feed-flow) project by [Marco Gomiero (prof18)](https://github.com/prof18).  
+> It enhances the official FeedFlow app with **AI-powered Article Summarisation** and **Relevance Ranking**.
+
 ![FeedFlow banner](assets/banners.png)
 
 ## Why FeedFlow
@@ -43,6 +47,7 @@
 - Offline reading by saving article content during sync
 - Timeline, read status, bookmark, source, and category filters
 - Blocked words to hide articles containing specific keywords or phrases
+- AI article summaries and AI relevance ranking (Most Relevant feed order)
 - Curated feed suggestions across different topics
 - Theme modes for system, light, dark, and OLED
 - Widgets for Android and iOS
@@ -74,6 +79,44 @@ or connect directly to reader services such as FreshRSS, Miniflux, Feedbin, and 
 
 Use bookmarks, read and unread states, timeline filters, source and category views, and blocked words.
 FeedFlow also supports auto-saving article content for offline reading and includes cache cleanup tools.
+
+### Summarise Articles & Rank Feeds With AI
+
+Reader Mode can generate a summary of the article you are reading. The summary appears as a
+collapsible card in the article itself, just above the body text, and scrolls with the rest of
+the page. FeedFlow also supports AI relevance ranking and "Most Relevant" feed ordering to bring high-interest articles to the top of your timeline. Nothing is sent anywhere until requested, and summary results are cached locally so reopening an article costs nothing.
+
+This feature uses your own API key. FeedFlow ships no key and adds no service of its own.
+
+Requests use the OpenAI chat completions format, so any provider speaking it works: Gemini (the
+default), OpenAI, Anthropic, Groq, OpenRouter or Together. Point the **API endpoint** at the
+provider and set **Model** to one it serves.
+
+**Setup:** Get a key from [Google AI Studio](https://aistudio.google.com/apikey) — or from another
+provider — then open **Settings → AI Features** and paste it in. The key is stored securely on
+device and never leaves except in direct requests to the configured API endpoint.
+
+| Provider | API endpoint | Example model |
+| --- | --- | --- |
+| Gemini (default) | `https://generativelanguage.googleapis.com/v1beta/openai/` | `gemini-3.5-flash-lite` |
+| OpenAI | `https://api.openai.com/v1` | `gpt-4o-mini` |
+| Anthropic | `https://api.anthropic.com/v1` | `claude-haiku-4-5` |
+| Groq | `https://api.groq.com/openai/v1` | `llama-3.3-70b-versatile` |
+| OpenRouter | `https://openrouter.ai/api/v1` | `google/gemini-2.5-flash` |
+
+The AI settings screen also exposes:
+
+| Setting | What it does |
+| --- | --- |
+| AI Toggle | Easily enable or disable AI features (summarisation and relevance ranking). |
+| Model | Which model to call. Defaults to `gemini-3.5-flash-lite`. |
+| API endpoint | The base URL requests go to. Defaults to Gemini's OpenAI-compatible endpoint. Any OpenAI-compatible provider, proxy, or self-hosted gateway works; `/chat/completions` is appended when the URL does not already end with it. |
+| System prompt | The instruction the model is given. Edit it to change the summary's length, tone, or language. |
+| Test Connection | Sends one short request so you can confirm the key, model, and endpoint work before relying on them. |
+
+Leaving Model or API endpoint empty restores its default. Changing either invalidates cached
+summaries, so the next article is summarised with the new settings rather than replaying an old
+result.
 
 ### Discover New Feeds Faster
 

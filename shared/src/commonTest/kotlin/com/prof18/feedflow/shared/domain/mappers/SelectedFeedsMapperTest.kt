@@ -171,6 +171,7 @@ class SelectedFeedsMapperTest {
         feed_source_notifications_enabled = isNotificationEnabled,
         feed_source_hide_images = feedSourceHideImages,
         feed_source_fetch_failed = false,
+        relevance_score = null,
     )
 
     private class FakeDateFormatter : DateFormatter {

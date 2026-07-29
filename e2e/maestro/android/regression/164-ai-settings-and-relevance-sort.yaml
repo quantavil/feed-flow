@@ -1,0 +1,73 @@
+appId: com.prof18.feedflow.debug
+---
+# AI is off by default, so "Most Relevant" must not appear in the sort sheet at all.
+# Turning AI on reveals it, but disabled until a key is set. No network is involved:
+# the flow never asks for a summary or a score, only that the gating behaves.
+- launchApp
+- openLink: feedflow://e2e/reset-and-seed?profile=content-rich
+- assertVisible: "E2E seed complete"
+- tapOn:
+    id: e2e_open_app
+
+# Default state: AI off, so the sort sheet offers only the two date orders.
+- tapOn:
+    id: home_more_menu_button
+- tapOn:
+    text: "Sort & filter"
+- assertVisible: "Newest First"
+- assertVisible: "Oldest First"
+- assertNotVisible: "Most Relevant"
+- back
+
+# Settings shows the feature as off.
+- tapOn:
+    id: drawer_menu_button
+- tapOn:
+    id: drawer_settings_button
+- assertVisible:
+    id: settings_ai
+- assertVisible: "Off"
+- tapOn:
+    id: settings_ai
+
+# Enabling reveals the provider fields.
+- assertVisible:
+    id: ai_settings_enable_switch
+- tapOn:
+    id: ai_settings_enable_switch
+- assertVisible:
+    id: ai_settings_api_key
+- assertVisible: "Model"
+- assertVisible: "Summary prompt"
+- back
+- assertVisible: "No key set"
+- tapOn:
+    id: settings_back_button
+
+# With AI on but no key, the option is present and explains why it cannot be used.
+- tapOn:
+    id: home_more_menu_button
+- tapOn:
+    text: "Sort & filter"
+- assertVisible: "Most Relevant"
+- assertVisible: "Needs an AI API key in Settings"
+- back
+
+# Turning AI back off hides it again.
+- tapOn:
+    id: drawer_menu_button
+- tapOn:
+    id: drawer_settings_button
+- tapOn:
+    id: settings_ai
+- tapOn:
+    id: ai_settings_enable_switch
+- back
+- assertVisible: "Off"
+- tapOn:
+    id: settings_back_button
+- tapOn:
+    id: home_more_menu_button
+- tapOn:
+    text: "Sort & filter"
+- assertNotVisible: "Most Relevant"

@@ -137,6 +137,7 @@ internal fun FeedItemView(
                     onOpenFeedWebsite = onOpenFeedWebsite,
                     onMarkAllAboveAsRead = onMarkAllAboveAsRead,
                     onMarkAllBelowAsRead = onMarkAllBelowAsRead,
+                    canMarkAboveOrBelowAsRead = !feedItemDisplaySettings.isRelevanceSortActive,
                 )
             }
         }
@@ -154,6 +155,11 @@ internal fun FeedItemView(
                 ),
         ) {
             CompositionLocalProvider(LocalLayoutDirection provides contentLayoutDirection) {
+                TopStoryLabel(
+                    feedItem = feedItem,
+                    feedItemDisplaySettings = feedItemDisplaySettings,
+                )
+
                 FeedSourceAndUnreadDotRow(
                     feedItem = feedItem,
                     feedFontSize = feedFontSize,
@@ -213,6 +219,7 @@ internal fun FeedItemView(
                 onOpenFeedWebsite = onOpenFeedWebsite,
                 onMarkAllAboveAsRead = onMarkAllAboveAsRead,
                 onMarkAllBelowAsRead = onMarkAllBelowAsRead,
+                canMarkAboveOrBelowAsRead = !feedItemDisplaySettings.isRelevanceSortActive,
             )
         }
 

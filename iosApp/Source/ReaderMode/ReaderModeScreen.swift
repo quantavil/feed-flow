@@ -274,7 +274,9 @@ struct ReaderModeScreen: View {
             title: isShowingFeedContent ? feedItemTitle : nil,
             imageUrl: currentImageUrl,
             leadingContent: "",
-            siteName: isShowingFeedContent ? currentSiteName : nil
+            siteName: isShowingFeedContent ? currentSiteName : nil,
+            // The AI summary card is Android-only for now: iOS has no bridge handler for it.
+            aiSummaryTitle: nil
         )
 
         self.readerStatus = .extractedContent(

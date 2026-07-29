@@ -1,0 +1,28 @@
+CREATE TABLE article_summary (
+    article_id TEXT NOT NULL,
+    content_hash TEXT NOT NULL PRIMARY KEY,
+    summary_text TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+);
+
+getSummaryByContentHash:
+SELECT summary_text
+FROM article_summary
+WHERE content_hash = :contentHash;
+
+insertSummary:
+INSERT OR REPLACE INTO article_summary (
+    article_id,
+    content_hash,
+    summary_text,
+    created_at
+) VALUES (
+    :articleId,
+    :contentHash,
+    :summaryText,
+    :createdAt
+);
+
+deleteSummariesOlderThan:
+DELETE FROM article_summary
+WHERE created_at < :threshold;

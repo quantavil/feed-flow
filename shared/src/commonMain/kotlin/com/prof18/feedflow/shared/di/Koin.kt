@@ -6,6 +6,8 @@ import co.touchlab.kermit.Severity
 import co.touchlab.kermit.StaticConfig
 import com.prof18.feedflow.core.domain.DateFormatter
 import com.prof18.feedflow.core.domain.FeedSourceLogoRetriever
+import com.prof18.feedflow.core.model.ArticleAiService
+import com.prof18.feedflow.core.model.OpenAiCompatibleArticleAiService
 import com.prof18.feedflow.core.utils.AppConfig
 import com.prof18.feedflow.core.utils.AppEnvironment
 import com.prof18.feedflow.core.utils.DispatcherProvider
@@ -17,6 +19,9 @@ import com.prof18.feedflow.feedsync.feedbin.di.getFeedbinModule
 import com.prof18.feedflow.feedsync.googledrive.di.googleDriveModule
 import com.prof18.feedflow.feedsync.greader.di.getGReaderModule
 import com.prof18.feedflow.feedsync.icloud.ICloudSettings
+import com.prof18.feedflow.shared.data.AiSettingsRepository
+import com.prof18.feedflow.shared.data.ArticleRelevanceRepository
+import com.prof18.feedflow.shared.data.ArticleSummaryRepository
 import com.prof18.feedflow.shared.data.FeedAppearanceSettingsRepository
 import com.prof18.feedflow.shared.data.ReviewRepository
 import com.prof18.feedflow.shared.data.SettingsRepository
@@ -42,6 +47,7 @@ import com.prof18.feedflow.shared.e2e.E2eSeedRunner
 import com.prof18.feedflow.shared.presentation.AboutAndSupportSettingsViewModel
 import com.prof18.feedflow.shared.presentation.AccountsViewModel
 import com.prof18.feedflow.shared.presentation.AddFeedViewModel
+import com.prof18.feedflow.shared.presentation.AiSettingsViewModel
 import com.prof18.feedflow.shared.presentation.BazquxSyncViewModel
 import com.prof18.feedflow.shared.presentation.BlockedWordsViewModel
 import com.prof18.feedflow.shared.presentation.ChangeFeedCategoryViewModel
@@ -219,6 +225,8 @@ private fun getCoreModule(appConfig: AppConfig) = module {
             feedStateRepository = get(),
             feedFetcherRepository = get(),
             getNextFeedFilterOrNullUseCase = get(),
+            articleRelevanceRepository = get(),
+            aiSettingsRepository = get(),
         )
     }
 
@@ -250,6 +258,57 @@ private fun getCoreModule(appConfig: AppConfig) = module {
     single {
         SettingsRepository(
             settings = get(),
+        )
+    }
+
+    single {
+        AiSettingsRepository(
+            apiKeyStorage = get(),
+            settings = get(),
+            dispatcherProvider = get(),
+        )
+    }
+
+    single<ArticleAiService> {
+        val aiSettingsRepository = get<AiSettingsRepository>()
+        OpenAiCompatibleArticleAiService(
+            // Not the HtmlRetriever client: that one is tuned for scraping pages (browser User-Agent,
+            // Accept: text/html, Referer) and is private to it. This one only needs a request timeout.
+            httpClient = HttpClient {
+                @Suppress("MagicNumber")
+                install(HttpTimeout) {
+                    requestTimeoutMillis = 60_000
+                    connectTimeoutMillis = 10_000
+                }
+            },
+            configProvider = { aiSettingsRepository.aiConfig() },
+        )
+    }
+
+    single {
+        ArticleRelevanceRepository(
+            databaseHelper = get(),
+            articleAiService = get(),
+            aiSettingsRepository = get(),
+            feedAppearanceSettingsRepository = get(),
+            logger = getWith("ArticleRelevanceRepository"),
+        )
+    }
+
+    single {
+        ArticleSummaryRepository(
+            databaseHelper = get(),
+            articleAiService = get(),
+            aiSettingsRepository = get(),
+        )
+    }
+
+    viewModel {
+        AiSettingsViewModel(
+            aiSettingsRepository = get(),
+            articleAiService = get(),
+            feedAppearanceSettingsRepository = get(),
+            dispatcherProvider = get(),
         )
     }
 
@@ -316,6 +375,7 @@ private fun getCoreModule(appConfig: AppConfig) = module {
 
     viewModel {
         FeedListSettingsViewModel(
+            aiSettingsRepository = get(),
             feedAppearanceSettingsRepository = get(),
             fontSizeRepository = get(),
             feedStateRepository = get(),

@@ -34,6 +34,9 @@ data object Appearance : NavKey
 data object AboutAndSupport : NavKey
 
 @Serializable
+data object AiSettings : NavKey
+
+@Serializable
 data object AddFeed : NavKey
 
 @Serializable

@@ -14,13 +14,15 @@ CREATE TABLE feed_item (
     comments_url TEXT,
     notification_sent INTEGER AS Boolean NOT NULL DEFAULT 0,
     is_blocked INTEGER AS Boolean NOT NULL DEFAULT 0,
-    content_fetched INTEGER AS Boolean NOT NULL DEFAULT 0
+    content_fetched INTEGER AS Boolean NOT NULL DEFAULT 0,
+    relevance_score INTEGER
 );
 
 CREATE INDEX idx_feed_item_feed_source_id ON feed_item(feed_source_id);
 CREATE INDEX idx_feed_item_pub_date ON feed_item(pub_date DESC);
 CREATE INDEX idx_feed_item_read_blocked ON feed_item(is_read, is_blocked);
 CREATE INDEX idx_feed_item_timeline ON feed_item(feed_source_id, is_read, is_blocked, pub_date DESC);
+CREATE INDEX idx_feed_item_relevance ON feed_item(relevance_score DESC, pub_date DESC);
 
 insertFeedItem:
 INSERT OR IGNORE INTO feed_item(url_hash, url, title, subtitle, content, image_url, feed_source_id, pub_date, comments_url)
@@ -51,7 +53,7 @@ AND (:isHidden IS NULL OR COALESCE(feed_source_preferences.is_hidden, 0) = :isHi
 AND is_blocked = 0;
 
 selectFeeds:
-SELECT feed_item.url_hash, feed_item.url, feed_item.title, subtitle, image_url, pub_date, comments_url, is_read, is_bookmarked, notification_sent, feed_source.title AS feed_source_title, feed_source.url_hash AS feed_source_id, feed_source.url AS feed_source_url, feed_source.last_sync_timestamp AS feed_source_last_sync_timestamp, feed_source_category.id AS feed_source_category_id, feed_source_category.title AS feed_source_category_title, feed_source.logo_url AS feed_source_logo_url, feed_source_preferences.article_open_mode AS feed_source_article_open_mode, feed_source_preferences.is_hidden AS feed_source_is_hidden, feed_source_preferences.is_pinned AS feed_source_is_pinned, feed_source_preferences.notifications_enabled AS feed_source_notifications_enabled, feed_source_preferences.hide_images AS feed_source_hide_images, feed_source.fetch_failed AS feed_source_fetch_failed FROM feed_item
+SELECT feed_item.url_hash, feed_item.url, feed_item.title, subtitle, image_url, pub_date, comments_url, is_read, is_bookmarked, notification_sent, feed_item.relevance_score, feed_source.title AS feed_source_title, feed_source.url_hash AS feed_source_id, feed_source.url AS feed_source_url, feed_source.last_sync_timestamp AS feed_source_last_sync_timestamp, feed_source_category.id AS feed_source_category_id, feed_source_category.title AS feed_source_category_title, feed_source.logo_url AS feed_source_logo_url, feed_source_preferences.article_open_mode AS feed_source_article_open_mode, feed_source_preferences.is_hidden AS feed_source_is_hidden, feed_source_preferences.is_pinned AS feed_source_is_pinned, feed_source_preferences.notifications_enabled AS feed_source_notifications_enabled, feed_source_preferences.hide_images AS feed_source_hide_images, feed_source.fetch_failed AS feed_source_fetch_failed FROM feed_item
 INNER JOIN feed_source
 ON feed_item.feed_source_id == feed_source.url_hash
 LEFT JOIN feed_source_category
@@ -110,8 +112,38 @@ AND (
             )
         )
     )
+    -- RELEVANCE leads on COALESCE(relevance_score, 50), which is never null, so the score needs
+    -- no null branches; once scores tie it degrades to exactly the DESC comparison above.
+    OR (
+        :sortOrder = 'RELEVANCE'
+        AND (
+            COALESCE(relevance_score, 50) < :lastRelevanceScore
+            OR (
+                COALESCE(relevance_score, 50) = :lastRelevanceScore
+                AND (
+                    (
+                        :lastPubDate IS NOT NULL
+                        AND (
+                            pub_date IS NULL
+                            OR pub_date < :lastPubDate
+                            OR (pub_date = :lastPubDate AND feed_item.url_hash < :lastUrlHash)
+                        )
+                    )
+                    OR (
+                        :lastPubDate IS NULL
+                        AND pub_date IS NULL
+                        AND feed_item.url_hash < :lastUrlHash
+                    )
+                )
+            )
+        )
+    )
 )
 ORDER BY
+    -- 50 is NEUTRAL_RELEVANCE_SCORE: unscored articles rank as average rather than last.
+    CASE WHEN :sortOrder = 'RELEVANCE' THEN COALESCE(relevance_score, 50) END DESC,
+    CASE WHEN :sortOrder = 'RELEVANCE' THEN pub_date END DESC,
+    CASE WHEN :sortOrder = 'RELEVANCE' THEN feed_item.url_hash END DESC,
     CASE WHEN :sortOrder = 'ASC' THEN pub_date END ASC,
     CASE WHEN :sortOrder = 'ASC' THEN feed_item.url_hash END ASC,
     CASE WHEN :sortOrder = 'DESC' THEN pub_date END DESC,
@@ -487,3 +519,36 @@ SELECT feed_item.url_hash, feed_item.url
 FROM feed_item
 WHERE content_fetched = 0 AND is_blocked = 0 AND feed_item.url <> ''
 ORDER BY pub_date DESC;
+
+-- Mirrors the filters of selectFeeds so the request budget is spent on the list the user is
+-- actually looking at. Read articles are only scored when the timeline is showing them.
+selectUnscoredItems:
+SELECT feed_item.url_hash, feed_item.title, feed_item.subtitle
+FROM feed_item
+INNER JOIN feed_source
+ON feed_item.feed_source_id == feed_source.url_hash
+LEFT JOIN feed_source_category
+ON feed_source.category_id == feed_source_category.id
+LEFT JOIN feed_source_preferences
+ON feed_source.url_hash = feed_source_preferences.feed_source_id
+WHERE relevance_score IS NULL
+AND is_blocked = 0
+AND feed_item.title IS NOT NULL
+AND (:isRead IS NULL OR is_read = :isRead)
+AND (:isBookmarked IS NULL OR is_bookmarked = :isBookmarked)
+AND (:feedSourceId IS NULL OR :feedSourceCategoryId IS NULL OR :isUncategorized IS NULL)
+AND (:feedSourceId IS NULL OR feed_item.feed_source_id = :feedSourceId)
+AND (:feedSourceCategoryId IS NULL OR feed_source_category.id = :feedSourceCategoryId)
+AND (:isUncategorized IS NULL OR (:isUncategorized = 1 AND feed_source.category_id IS NULL))
+AND (:isHidden IS NULL OR COALESCE(feed_source_preferences.is_hidden, 0) = :isHidden)
+ORDER BY pub_date DESC
+LIMIT :limit;
+
+updateRelevanceScore:
+UPDATE feed_item
+SET relevance_score = :score
+WHERE url_hash = :urlHash;
+
+clearRelevanceScores:
+UPDATE feed_item
+SET relevance_score = NULL;

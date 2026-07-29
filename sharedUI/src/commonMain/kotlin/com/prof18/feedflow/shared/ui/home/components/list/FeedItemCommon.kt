@@ -13,6 +13,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Category
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -31,6 +32,7 @@ import com.prof18.feedflow.core.model.FeedFilter
 import com.prof18.feedflow.core.model.FeedFontSizes
 import com.prof18.feedflow.core.model.FeedItem
 import com.prof18.feedflow.core.model.FeedItemDisplaySettings
+import com.prof18.feedflow.core.model.TOP_STORY_RELEVANCE_SCORE
 import com.prof18.feedflow.shared.ui.components.FeedSourceLogoImage
 import com.prof18.feedflow.shared.ui.home.components.FeedItemHeroImage
 import com.prof18.feedflow.shared.ui.home.components.FeedItemImage
@@ -38,8 +40,42 @@ import com.prof18.feedflow.shared.ui.style.Spacing
 import com.prof18.feedflow.shared.ui.utils.LocalFeedFlowStrings
 
 private val ImageCardUnreadDotSize = 9.dp
+private val TopStoryIconSize = 14.dp
 private const val ReadTextAlpha = 0.6f
 private const val ReadImageAlpha = 0.76f
+
+/**
+ * Marks only the articles in the rubric's top band, and only while the list is ranked. Anything
+ * unscored simply shows nothing, which is the honest signal: it has not been judged yet.
+ */
+@Composable
+internal fun TopStoryLabel(
+    feedItem: FeedItem,
+    feedItemDisplaySettings: FeedItemDisplaySettings,
+    modifier: Modifier = Modifier,
+) {
+    if (!feedItemDisplaySettings.isRelevanceSortActive) return
+    if ((feedItem.relevanceScore ?: 0) < TOP_STORY_RELEVANCE_SCORE) return
+
+    Row(
+        modifier = modifier.padding(bottom = Spacing.xsmall),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            modifier = Modifier.size(TopStoryIconSize),
+            imageVector = Icons.Outlined.AutoAwesome,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+        )
+        Text(
+            modifier = Modifier.padding(start = Spacing.xsmall),
+            text = LocalFeedFlowStrings.current.feedTopStoryLabel,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.primary,
+        )
+    }
+}
 
 @Composable
 internal fun FeedSourceAndUnreadDotRow(
@@ -213,6 +249,11 @@ internal fun FeedItemImageCardContent(
                     vertical = Spacing.regular,
                 ),
         ) {
+            TopStoryLabel(
+                feedItem = feedItem,
+                feedItemDisplaySettings = feedItemDisplaySettings,
+            )
+
             FeedItemCardSourceRow(
                 feedItem = feedItem,
                 feedFontSize = feedFontSize,
