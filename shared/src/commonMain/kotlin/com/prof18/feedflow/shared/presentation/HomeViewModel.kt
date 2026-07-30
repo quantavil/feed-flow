@@ -120,6 +120,7 @@ class HomeViewModel internal constructor(
     private val pendingScrollReadIds = mutableSetOf<FeedItemId>()
     private var scrollReadDebounceJob: Job? = null
     private var hasTriggeredAppLaunch = false
+    private var pageRequestDeferredWhileRanking = false
 
     val currentFeedFilter = feedStateRepository.currentFeedFilter
     val isSyncUploadRequired: StateFlow<Boolean> = settingsRepository.isSyncUploadRequired
@@ -336,6 +337,13 @@ class HomeViewModel internal constructor(
         if (wroteScores) {
             feedStateRepository.getFeeds()
         }
+        // Replayed after the republish, never before it: getFeeds resets the list to the first
+        // page, so a page loaded any earlier is thrown away and the list is still short.
+        // A concurrent run may hold the scoring lock, in which case that one replays instead.
+        if (pageRequestDeferredWhileRanking && !articleRelevanceRepository.isRanking.value) {
+            pageRequestDeferredWhileRanking = false
+            feedStateRepository.loadMoreFeeds()
+        }
     }
 
     fun onVisibleFeedItemsChanged(visibleItems: List<VisibleFeedItem>) {
@@ -366,8 +374,10 @@ class HomeViewModel internal constructor(
     fun requestNewFeedsPage() {
         // Keyset pagination is keyed on relevance_score. Scoring mutates that column in
         // batches, so a page loaded mid-rank can skip rows that moved above the cursor or
-        // re-append rows that dropped below it. Wait for the ranked first page instead.
+        // re-append rows that dropped below it. Deferred rather than dropped: the list view
+        // only asks again when its "near the end" flag flips, which a dropped page never does.
         if (articleRelevanceRepository.isRanking.value) {
+            pageRequestDeferredWhileRanking = true
             return
         }
         viewModelScope.launch {
