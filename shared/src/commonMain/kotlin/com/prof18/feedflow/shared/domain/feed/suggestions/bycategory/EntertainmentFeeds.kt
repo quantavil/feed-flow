@@ -63,6 +63,18 @@ internal val entertainmentFeeds = SuggestedFeedCategory(
             logoUrl = "https://www.google.com/s2/favicons?domain=screenrant.com&sz=64",
         ),
         SuggestedFeed(
+            name = "The Hindu - Entertainment",
+            url = "https://www.thehindu.com/entertainment/feeder/default.rss",
+            description = "Indian cinema, music, arts, and culture",
+            logoUrl = "https://www.google.com/s2/favicons?domain=thehindu.com&sz=64",
+        ),
+        SuggestedFeed(
+            name = "The Indian Express - Entertainment",
+            url = "https://indianexpress.com/section/entertainment/feed/",
+            description = "Indian movie reviews, culture, and entertainment news",
+            logoUrl = "https://www.google.com/s2/favicons?domain=indianexpress.com&sz=64",
+        ),
+        SuggestedFeed(
             name = "Vanity Fair",
             url = "https://www.vanityfair.com/feed/rss",
             description = "Culture, fashion, and celebrity",

@@ -87,10 +87,46 @@ internal val newsFeeds = SuggestedFeedCategory(
             logoUrl = "https://www.google.com/s2/favicons?domain=theguardian.com&sz=64",
         ),
         SuggestedFeed(
+            name = "The Hindu - National",
+            url = "https://www.thehindu.com/news/national/feeder/default.rss",
+            description = "Independent national news and reporting from India",
+            logoUrl = "https://www.google.com/s2/favicons?domain=thehindu.com&sz=64",
+        ),
+        SuggestedFeed(
+            name = "The Hindu - Opinion",
+            url = "https://www.thehindu.com/opinion/feeder/default.rss",
+            description = "Editorials and opinion pieces from India",
+            logoUrl = "https://www.google.com/s2/favicons?domain=thehindu.com&sz=64",
+        ),
+        SuggestedFeed(
+            name = "The Hindu - World",
+            url = "https://www.thehindu.com/news/international/feeder/default.rss",
+            description = "International news from an Indian perspective",
+            logoUrl = "https://www.google.com/s2/favicons?domain=thehindu.com&sz=64",
+        ),
+        SuggestedFeed(
             name = "The Independent - News",
             url = "https://www.independent.co.uk/news/rss",
             description = "UK independent news coverage",
             logoUrl = "https://www.google.com/s2/favicons?domain=independent.co.uk&sz=64",
+        ),
+        SuggestedFeed(
+            name = "The Indian Express - India",
+            url = "https://indianexpress.com/section/india/feed/",
+            description = "Top news and investigative journalism from India",
+            logoUrl = "https://www.google.com/s2/favicons?domain=indianexpress.com&sz=64",
+        ),
+        SuggestedFeed(
+            name = "The Indian Express - Opinion",
+            url = "https://indianexpress.com/section/opinion/feed/",
+            description = "Political analysis and opinion columns from India",
+            logoUrl = "https://www.google.com/s2/favicons?domain=indianexpress.com&sz=64",
+        ),
+        SuggestedFeed(
+            name = "The Indian Express - World",
+            url = "https://indianexpress.com/section/world/feed/",
+            description = "Global news coverage from India",
+            logoUrl = "https://www.google.com/s2/favicons?domain=indianexpress.com&sz=64",
         ),
         SuggestedFeed(
             name = "The New Yorker - News",

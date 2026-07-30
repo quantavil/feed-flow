@@ -45,6 +45,30 @@ internal val scienceFeeds = SuggestedFeedCategory(
             logoUrl = "https://www.google.com/s2/favicons?domain=atlanticsciencechannel.com&sz=64",
         ),
         SuggestedFeed(
+            name = "The Hindu - Environment",
+            url = "https://www.thehindu.com/sci-tech/energy-and-environment/feeder/default.rss",
+            description = "Climate change, energy, and environmental news from India",
+            logoUrl = "https://www.google.com/s2/favicons?domain=thehindu.com&sz=64",
+        ),
+        SuggestedFeed(
+            name = "The Hindu - Health",
+            url = "https://www.thehindu.com/sci-tech/health/feeder/default.rss",
+            description = "Medical research, public health, and wellness from India",
+            logoUrl = "https://www.google.com/s2/favicons?domain=thehindu.com&sz=64",
+        ),
+        SuggestedFeed(
+            name = "The Hindu - Science",
+            url = "https://www.thehindu.com/sci-tech/science/feeder/default.rss",
+            description = "ISRO, space, biology, and scientific research from India",
+            logoUrl = "https://www.google.com/s2/favicons?domain=thehindu.com&sz=64",
+        ),
+        SuggestedFeed(
+            name = "The Indian Express - Science",
+            url = "https://indianexpress.com/section/science/feed/",
+            description = "Scientific discoveries and research news from India",
+            logoUrl = "https://www.google.com/s2/favicons?domain=indianexpress.com&sz=64",
+        ),
+        SuggestedFeed(
             name = "CleanTechnica",
             url = "https://cleantechnica.com/feed/",
             description = "Clean energy and technology",
