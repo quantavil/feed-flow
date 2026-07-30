@@ -364,6 +364,12 @@ class HomeViewModel internal constructor(
     }
 
     fun requestNewFeedsPage() {
+        // Keyset pagination is keyed on relevance_score. Scoring mutates that column in
+        // batches, so a page loaded mid-rank can skip rows that moved above the cursor or
+        // re-append rows that dropped below it. Wait for the ranked first page instead.
+        if (articleRelevanceRepository.isRanking.value) {
+            return
+        }
         viewModelScope.launch {
             feedStateRepository.loadMoreFeeds()
         }

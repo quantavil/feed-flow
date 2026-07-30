@@ -32,6 +32,7 @@ const val MAX_REQUEST_INPUT_LENGTH = 10000
 private const val API_KEY_HEADER = "x-goog-api-key"
 private const val GENERATE_CONTENT_METHOD = ":generateContent"
 private const val JSON_MIME_TYPE = "application/json"
+private val VALID_MODEL_NAME = Regex("^[A-Za-z0-9._-]+$")
 
 // Every finish reason that means "the model stopped because something objected", as opposed to
 // running out of room. RECITATION and SPII land here too: the user sees a refusal either way.
@@ -55,7 +56,11 @@ class GeminiArticleAiService(
         val apiKey = config.apiKey?.takeIf { it.isNotBlank() }
             ?: throw AiSummaryException(AiSummaryError.MISSING_API_KEY)
 
-        val model = config.model.trim().ifBlank { DEFAULT_AI_MODEL }
+        // Path-segment only: free-text model names with ?, /, spaces, or newlines produce a
+        // malformed generateContent URL and a confusing network error instead of a clear fallback.
+        val model = config.model.trim()
+            .takeIf { it.matches(VALID_MODEL_NAME) }
+            ?: DEFAULT_AI_MODEL
         val url = "$GEMINI_MODELS_URL$model$GENERATE_CONTENT_METHOD"
         val (status, body) = request(url, apiKey, systemPrompt, input, responseSchema)
         if (!status.isSuccess()) {

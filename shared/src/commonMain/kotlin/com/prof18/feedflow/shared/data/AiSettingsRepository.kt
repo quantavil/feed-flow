@@ -53,8 +53,20 @@ class AiSettingsRepository(
     /**
      * Suspending because the first read builds the Keystore-backed store, which costs tens of
      * milliseconds. Callers reach this from the timeline, so it must not land on the main thread.
+     *
+     * Also reconciles [hasApiKey] with the encrypted store: a Keystore invalidation can leave the
+     * plain-settings mirror true while the real key is unreadable, which would show "Most Relevant"
+     * as available and then silently skip scoring.
      */
-    suspend fun getApiKey(): String? = withContext(dispatcherProvider.io) { apiKeyStorage.getApiKey() }
+    suspend fun getApiKey(): String? = withContext(dispatcherProvider.io) {
+        val key = apiKeyStorage.getApiKey()
+        val hasKey = !key.isNullOrBlank()
+        if (settings.getBoolean(HAS_API_KEY_KEY, false) != hasKey) {
+            settings[HAS_API_KEY_KEY] = hasKey
+        }
+        mutableHasApiKey.update { hasKey }
+        key
+    }
 
     /**
      * Suspending because the write is encrypted, which is real work on the calling thread.

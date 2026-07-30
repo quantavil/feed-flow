@@ -83,6 +83,21 @@ class GeminiArticleAiServiceTest {
     }
 
     @Test
+    fun `complete falls back to the default model when the name is not a path segment`() = runTest {
+        val requestedUrls = mutableListOf<String>()
+        val mockEngine = MockEngine { request ->
+            requestedUrls += request.url.toString()
+            jsonResponse(textCandidate("ok"))
+        }
+
+        GeminiArticleAiService(HttpClient(mockEngine)) {
+            config(apiKey = "key", model = "gemini-3.5-flash-lite?foo=bar")
+        }.complete("Prompt", "Text")
+
+        assertEquals("$GEMINI_MODELS_URL$DEFAULT_AI_MODEL:generateContent", requestedUrls.single())
+    }
+
+    @Test
     fun `complete sends the prompt as a system instruction and truncates the input`() = runTest {
         var capturedBody = ""
         val mockEngine = MockEngine { request ->

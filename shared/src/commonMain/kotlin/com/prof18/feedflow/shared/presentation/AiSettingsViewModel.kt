@@ -7,6 +7,7 @@ import com.prof18.feedflow.core.model.AiSummaryException
 import com.prof18.feedflow.core.model.ArticleAiService
 import com.prof18.feedflow.shared.data.AiSettingsRepository
 import com.prof18.feedflow.shared.data.FeedAppearanceSettingsRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -57,6 +58,7 @@ class AiSettingsViewModel(
     val testState: StateFlow<AiTestState> = mutableTestState.asStateFlow()
 
     private var apiKeyWriteJob: Job? = null
+    private var testJob: Job? = null
 
     fun setAiEnabled(enabled: Boolean) {
         aiSettingsRepository.setAiEnabled(enabled)
@@ -100,8 +102,11 @@ class AiSettingsViewModel(
             return
         }
 
+        // Cancel any in-flight test so a double-tap cannot bill twice or let an older response
+        // overwrite a newer Testing/Success/Error state.
+        testJob?.cancel()
         mutableTestState.update { AiTestState.Testing }
-        viewModelScope.launch {
+        testJob = viewModelScope.launch {
             // The field is the source of truth for the user, but the service reads the key back
             // out of storage. Without waiting for the pending write, testing a freshly pasted key
             // checks whatever the keystore still holds and reports a failure that is not real.
@@ -115,6 +120,8 @@ class AiSettingsViewModel(
                     input = TEST_ARTICLE_TEXT,
                 )
                 AiTestState.Success
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: AiSummaryException) {
                 AiTestState.Error(e)
             }
