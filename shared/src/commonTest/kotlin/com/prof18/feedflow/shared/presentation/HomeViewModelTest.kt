@@ -1873,6 +1873,48 @@ class HomeViewModelTest : KoinTestBase() {
         assertEquals(80, viewModel.feedState.value.size)
     }
 
+    @Test
+    fun `a page requested after switching feed mid-ranking is still loaded`() = runTest(testDispatcher) {
+        val sourceOne = createFeedSource(id = "source-1", title = "Source 1")
+        val sourceTwo = createFeedSource(id = "source-2", title = "Source 2")
+        insertFeedSources(sourceOne, sourceTwo)
+        val items = listOf(sourceOne, sourceTwo).flatMap { source ->
+            (1..80).map { index ->
+                buildFeedItem(
+                    id = "${source.id}-item-$index",
+                    title = "Item $index",
+                    pubDateMillis = 1000L + index,
+                    source = source,
+                )
+            }
+        }
+        databaseHelper.insertFeedItems(items, lastSyncTimestamp = 0)
+        aiSettingsRepository.setAiEnabled(true)
+
+        val viewModel = getViewModel()
+        advanceUntilIdle()
+
+        viewModel.updateFeedOrder(FeedOrder.MOST_RELEVANT)
+        advanceUntilIdle()
+        assertTrue(viewModel.isRankingArticles.value)
+
+        // Opening a feed is a newer intent than the run already in flight: without cancelling it,
+        // the run for the feed the user left keeps the banner up and the new feed goes unscored
+        // for as long as it takes to finish.
+        assertEquals(1, gatedAiService.callCount)
+        viewModel.onFeedFilterSelected(FeedFilter.Source(sourceTwo))
+        advanceUntilIdle()
+        assertEquals(2, gatedAiService.callCount)
+
+        viewModel.requestNewFeedsPage()
+        advanceUntilIdle()
+
+        gatedAiService.release()
+        advanceUntilIdle()
+
+        assertEquals(80, viewModel.feedState.value.size)
+    }
+
     private fun getViewModel(): HomeViewModel = get()
 
     private suspend fun insertFeedSources(vararg sources: FeedSource) {
@@ -1977,9 +2019,14 @@ class HomeViewModelTest : KoinTestBase() {
     private class GatedArticleAiService : ArticleAiService {
         private val gate = CompletableDeferred<Unit>()
 
+        /** One per request actually started, so a cancelled run is visible as a restarted one. */
+        var callCount: Int = 0
+            private set
+
         fun release() = gate.complete(Unit)
 
         override suspend fun complete(systemPrompt: String, input: String, responseSchema: String?): String {
+            callCount += 1
             gate.await()
             return "[]"
         }

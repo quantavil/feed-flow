@@ -381,8 +381,11 @@ private fun ReaderMode(
     val strings = LocalFeedFlowStrings.current
     val articleContent = readerModeState.readerModeData.content
 
-    val aiSettingsRepository = koinInject<AiSettingsRepository>()
-    val isAiEnabled by aiSettingsRepository.isAiEnabled.collectAsStateWithLifecycle()
+    val summaryCard = rememberArticleSummaryCard(
+        articleId = readerModeState.readerModeData.id.id,
+        articleContent = articleContent,
+        navigator = navigator,
+    )
 
     val content = getReaderModeStyledHtml(
         colors = colors,
@@ -396,35 +399,8 @@ private fun ReaderMode(
         leadingContent = "<div id=\"__feedflow_top_spacer\" style=\"height: ${spacerHeightDp}px;\"></div>",
         siteName = readerModeState.readerModeData.siteName,
         // Null omits the whole card from the page, so with AI off the reader has no trace of it.
-        aiSummaryTitle = strings.aiSummaryTitle.takeIf { isAiEnabled },
+        aiSummaryTitle = summaryCard.title,
     )
-
-    val logger = koinInject<Logger>()
-    val summaryRepository = koinInject<ArticleSummaryRepository>()
-    // Reset per article so switching articles never replays a request against the new page,
-    // and so the effect below is cancelled when the loaded content changes.
-    var summaryRequestCount by remember(articleContent) { mutableIntStateOf(0) }
-    val requestSummary by rememberUpdatedState({ summaryRequestCount++ })
-
-    LaunchedEffect(articleContent, summaryRequestCount) {
-        if (summaryRequestCount == 0) return@LaunchedEffect
-        navigator.evaluateJavaScript(readerAiSummaryRenderJs("loading", strings.aiSummaryLoading))
-        // Catches more than AiSummaryException on purpose: summarise() also reads and writes the
-        // summary cache, and a SQLite failure here would otherwise escape into the reader.
-        @Suppress("TooGenericExceptionCaught")
-        val js = try {
-            val summary = summaryRepository.summarise(readerModeState.readerModeData.id.id, articleContent)
-            readerAiSummaryRenderJs("text", summary)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: AiSummaryException) {
-            readerAiSummaryRenderJs("error", strings.aiErrorMessage(e), strings.aiSummaryRetry)
-        } catch (e: Exception) {
-            logger.e(e) { "Could not build the AI summary" }
-            readerAiSummaryRenderJs("error", strings.aiSummaryGenericError, strings.aiSummaryRetry)
-        }
-        navigator.evaluateJavaScript(js)
-    }
 
     val jsBridge = rememberWebViewJsBridge()
     LaunchedEffect(jsBridge) {
@@ -435,7 +411,7 @@ private fun ReaderMode(
                     navigator: WebViewNavigator?,
                     callback: (String) -> Unit,
                 ) {
-                    requestSummary()
+                    summaryCard.onRequest()
                 }
 
                 override fun methodName(): String = "aiSummary"
@@ -583,3 +559,61 @@ private fun isValidImageUrl(url: String): Boolean {
         url.contains("::1")
     return isHttpUrl && !isLocalhost
 }
+
+/**
+ * Everything the reader page needs to show an AI summary: the card title to inject, or null to
+ * leave the card out of the HTML entirely, plus the callback the page's JS bridge fires when the
+ * user expands it.
+ *
+ * The card is offered only with a key stored - without one it can only ever expand into "set an
+ * API key", which is the same gate the "Most Relevant" sort option uses.
+ */
+@Composable
+private fun rememberArticleSummaryCard(
+    articleId: String,
+    articleContent: String,
+    navigator: WebViewNavigator,
+): ArticleSummaryCard {
+    val strings = LocalFeedFlowStrings.current
+    val logger = koinInject<Logger>()
+    val aiSettingsRepository = koinInject<AiSettingsRepository>()
+    val summaryRepository = koinInject<ArticleSummaryRepository>()
+    val isAiEnabled by aiSettingsRepository.isAiEnabled.collectAsStateWithLifecycle()
+    val hasApiKey by aiSettingsRepository.hasApiKey.collectAsStateWithLifecycle()
+
+    // Reset per article so switching articles never replays a request against the new page,
+    // and so the effect below is cancelled when the loaded content changes.
+    var summaryRequestCount by remember(articleContent) { mutableIntStateOf(0) }
+
+    LaunchedEffect(articleContent, summaryRequestCount) {
+        if (summaryRequestCount == 0) return@LaunchedEffect
+        navigator.evaluateJavaScript(readerAiSummaryRenderJs("loading", strings.aiSummaryLoading))
+        // Catches more than AiSummaryException on purpose: summarise() also reads and writes the
+        // summary cache, and a SQLite failure here would otherwise escape into the reader.
+        @Suppress("TooGenericExceptionCaught")
+        val js = try {
+            readerAiSummaryRenderJs("text", summaryRepository.summarise(articleId, articleContent))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: AiSummaryException) {
+            readerAiSummaryRenderJs("error", strings.aiErrorMessage(e), strings.aiSummaryRetry)
+        } catch (e: Exception) {
+            logger.e(e) { "Could not build the AI summary" }
+            readerAiSummaryRenderJs("error", strings.aiSummaryGenericError, strings.aiSummaryRetry)
+        }
+        navigator.evaluateJavaScript(js)
+    }
+
+    val isOffered = isAiEnabled && hasApiKey
+    return remember(isOffered, strings) {
+        ArticleSummaryCard(
+            title = strings.aiSummaryTitle.takeIf { isOffered },
+            onRequest = { summaryRequestCount++ },
+        )
+    }
+}
+
+private data class ArticleSummaryCard(
+    val title: String?,
+    val onRequest: () -> Unit,
+)

@@ -120,8 +120,6 @@ private fun AiSettingsScreenContent(
                 )
             }
 
-            // Everything below is inert while the switch is off, rather than hidden, so the user
-            // can see what turning it on would involve.
             if (!settings.isAiEnabled) {
                 return@Column
             }

@@ -79,7 +79,7 @@ class ArticleRelevanceRepositoryTest {
     fun `short headlines still batch by item count`() {
         val items = List(120) { UnscoredItem(id = "id$it", title = "Short", subtitle = null) }
 
-        assertEquals(listOf(50, 50, 20), batchesUnderPromptBudget(items).map { it.size })
+        assertEquals(listOf(40, 40, 40), batchesUnderPromptBudget(items).map { it.size })
     }
 
     @Test

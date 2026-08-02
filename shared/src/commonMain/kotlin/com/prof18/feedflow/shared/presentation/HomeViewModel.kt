@@ -51,6 +51,7 @@ import kotlinx.collections.immutable.toImmutableList
 import kotlinx.collections.immutable.toPersistentMap
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -67,6 +68,8 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlin.time.Duration.Companion.seconds
 
 class HomeViewModel internal constructor(
@@ -120,7 +123,14 @@ class HomeViewModel internal constructor(
     private val pendingScrollReadIds = mutableSetOf<FeedItemId>()
     private var scrollReadDebounceJob: Job? = null
     private var hasTriggeredAppLaunch = false
-    private var pageRequestDeferredWhileRanking = false
+
+    // Keyset pagination is keyed on relevance_score, which scoring mutates in batches, and the
+    // post-scoring republish resets the list to the first page. A page loaded across either would
+    // skip rows that moved above the cursor or be thrown away by the republish. Queued rather than
+    // dropped: the list only asks again when its "near the end" flag flips, which never happens on
+    // a list short enough to fit on screen, so a dropped page stops pagination for good.
+    private val listMutation = Mutex()
+    private var rankingJob: Job? = null
 
     val currentFeedFilter = feedStateRepository.currentFeedFilter
     val isSyncUploadRequired: StateFlow<Boolean> = settingsRepository.isSyncUploadRequired
@@ -329,20 +339,26 @@ class HomeViewModel internal constructor(
         }
     }
 
-    private suspend fun rankArticles() {
-        val wroteScores = articleRelevanceRepository.scoreIfNeeded(
-            feedFilter = feedStateRepository.getCurrentFeedFilter(),
-            showReadItems = settingsRepository.getShowReadArticlesTimeline(),
-        )
-        if (wroteScores) {
-            feedStateRepository.getFeeds()
-        }
-        // Replayed after the republish, never before it: getFeeds resets the list to the first
-        // page, so a page loaded any earlier is thrown away and the list is still short.
-        // A concurrent run may hold the scoring lock, in which case that one replays instead.
-        if (pageRequestDeferredWhileRanking && !articleRelevanceRepository.isRanking.value) {
-            pageRequestDeferredWhileRanking = false
-            feedStateRepository.loadMoreFeeds()
+    /**
+     * Cancels whatever run is already in flight rather than queueing behind it. A run is up to two
+     * hundred headlines spread over a batch per second, so letting it finish means the feed the
+     * user just opened sits behind minutes of scoring for a feed they have left - which is what
+     * "Ranking articles" appearing to hang actually is. Scores are committed per batch, so the
+     * batches already paid for survive the cancel.
+     */
+    private fun rankArticles() {
+        val previousRun = rankingJob
+        rankingJob = viewModelScope.launch {
+            previousRun?.cancelAndJoin()
+            listMutation.withLock {
+                val wroteScores = articleRelevanceRepository.scoreIfNeeded(
+                    feedFilter = feedStateRepository.getCurrentFeedFilter(),
+                    showReadItems = settingsRepository.getShowReadArticlesTimeline(),
+                )
+                if (wroteScores) {
+                    feedStateRepository.getFeeds()
+                }
+            }
         }
     }
 
@@ -372,16 +388,10 @@ class HomeViewModel internal constructor(
     }
 
     fun requestNewFeedsPage() {
-        // Keyset pagination is keyed on relevance_score. Scoring mutates that column in
-        // batches, so a page loaded mid-rank can skip rows that moved above the cursor or
-        // re-append rows that dropped below it. Deferred rather than dropped: the list view
-        // only asks again when its "near the end" flag flips, which a dropped page never does.
-        if (articleRelevanceRepository.isRanking.value) {
-            pageRequestDeferredWhileRanking = true
-            return
-        }
         viewModelScope.launch {
-            feedStateRepository.loadMoreFeeds()
+            listMutation.withLock {
+                feedStateRepository.loadMoreFeeds()
+            }
         }
     }
 

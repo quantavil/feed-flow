@@ -23,6 +23,7 @@ import com.prof18.feedflow.core.model.FeedItemId
 import com.prof18.feedflow.core.model.FeedItemUrlInfo
 import com.prof18.feedflow.core.model.FeedItemUrlTitle
 import com.prof18.feedflow.core.model.FeedSource
+import com.prof18.feedflow.i18n.FeedFlowStrings
 import com.prof18.feedflow.shared.ui.components.ConfirmationDialog
 import com.prof18.feedflow.shared.ui.components.menu.DesktopPopupMenu
 import com.prof18.feedflow.shared.ui.components.menu.DesktopPopupMenuEntry
@@ -105,7 +106,7 @@ internal actual fun FeedItemContextMenu(
 }
 
 private fun buildFeedItemDesktopMenuEntries(
-    strings: com.prof18.feedflow.i18n.FeedFlowStrings,
+    strings: FeedFlowStrings,
     feedItem: FeedItem,
     shareMenuLabel: String,
     shareCommentsMenuLabel: String,

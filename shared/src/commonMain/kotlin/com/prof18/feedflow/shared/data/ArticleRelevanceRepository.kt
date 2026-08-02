@@ -10,11 +10,11 @@ import com.prof18.feedflow.core.model.MAX_REQUEST_INPUT_LENGTH
 import com.prof18.feedflow.core.model.MIN_RELEVANCE_SCORE
 import com.prof18.feedflow.database.DatabaseHelper
 import com.prof18.feedflow.database.UnscoredItem
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.sync.Mutex
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
@@ -52,7 +52,6 @@ class ArticleRelevanceRepository(
     private val logger: Logger,
     private val json: Json = Json { ignoreUnknownKeys = true },
 ) {
-    private val scoringMutex = Mutex()
     private val mutableIsRanking = MutableStateFlow(false)
 
     /** True only while a scoring run is genuinely in flight. */
@@ -72,18 +71,16 @@ class ArticleRelevanceRepository(
         if (feedAppearanceSettingsRepository.getFeedOrder() != FeedOrder.MOST_RELEVANT) return false
         // Checked before the key so the Keystore is not touched at all while AI is off.
         if (aiSettingsRepository.getApiKey().isNullOrBlank()) return false
-        // A refresh, a feed switch and a sort change can all land within a second of each other,
-        // and each would otherwise spend a full run of requests re-scoring the same headlines.
-        if (!scoringMutex.tryLock()) return false
 
         // Raised only once the early returns are behind us: on date sorting this method does
         // nothing, and a flag set before them makes the progress banner flash on every refresh.
+        // Callers are responsible for not overlapping runs; HomeViewModel cancels the previous
+        // one, which is what keeps a refresh, a feed switch and a sort change to a single run.
         mutableIsRanking.update { true }
         return try {
             scoreUnscoredItems(feedFilter, showReadItems)
         } finally {
             mutableIsRanking.update { false }
-            scoringMutex.unlock()
         }
     }
 
@@ -97,7 +94,13 @@ class ArticleRelevanceRepository(
             showReadItems = showReadItems,
             limit = MAX_ITEMS_PER_RUN,
         )
-        for (batch in batchesUnderPromptBudget(items)) {
+        for ((index, batch) in batchesUnderPromptBudget(items).withIndex()) {
+            // A run can be a dozen batches back to back and Gemini bills requests per minute, so
+            // fired without a gap the tail of the run reliably trips a 429 - which aborts the
+            // whole run below and leaves everything unscored, to be paid for again next refresh.
+            if (index > 0) {
+                delay(BATCH_INTERVAL_MILLIS)
+            }
             val scores = try {
                 scoreBatch(batch)
             } catch (e: AiSummaryException) {
@@ -141,14 +144,15 @@ class ArticleRelevanceRepository(
 
     private companion object {
         const val MAX_ITEMS_PER_RUN = 200L
+        const val BATCH_INTERVAL_MILLIS = 1000L
 
         // Bump when RELEVANCE_SYSTEM_PROMPT changes in a way that shifts the scale.
-        // 2: moved to the native Gemini endpoint with a response schema and a thinking level.
+        // 2: moved to the native Gemini endpoint with a response schema.
         const val RUBRIC_VERSION = 2
     }
 }
 
-private const val MAX_BATCH_SIZE = 50
+private const val MAX_BATCH_SIZE = 40
 private const val TITLE_LIMIT = 200
 private const val SUBTITLE_LIMIT = 300
 
@@ -159,9 +163,9 @@ internal fun promptLine(index: Int, item: UnscoredItem): String {
 
 /**
  * The service truncates its input at [MAX_REQUEST_INPUT_LENGTH], so a batch has to be closed on
- * the character budget as well as the item count. Fifty headlines with subtitles run to roughly
- * 25k characters: left to a fixed chunk size, everything past the cut reaches the model as
- * nothing at all, comes back unscored, and is paid for again on the next run.
+ * the character budget as well as the item count, and in practice the budget is what binds:
+ * [MAX_BATCH_SIZE] headlines with subtitles run well past the cut, and everything past it reaches
+ * the model as nothing at all, comes back unscored, and is paid for again on the next run.
  */
 internal fun batchesUnderPromptBudget(items: List<UnscoredItem>): List<List<UnscoredItem>> {
     val batches = mutableListOf<List<UnscoredItem>>()
