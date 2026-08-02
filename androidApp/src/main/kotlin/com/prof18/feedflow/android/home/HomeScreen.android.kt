@@ -72,7 +72,6 @@ internal fun HomeScreen(
     val isSyncUploadRequired by homeViewModel.isSyncUploadRequired.collectAsStateWithLifecycle()
     val feedItemDisplaySettings by homeViewModel.feedItemDisplaySettings.collectAsStateWithLifecycle()
     val viewMenuState by homeViewModel.viewMenuState.collectAsStateWithLifecycle()
-    val isRankingArticles by homeViewModel.isRankingArticles.collectAsStateWithLifecycle()
 
     val categoriesState by changeFeedCategoryViewModel.categoriesState.collectAsStateWithLifecycle()
 
@@ -150,7 +149,6 @@ internal fun HomeScreen(
             isSyncUploadRequired = isSyncUploadRequired,
             nextFeedDisplayState = nextFeedPreviewState.asDisplayState(),
             feedItemDisplaySettings = feedItemDisplaySettings,
-            isRankingArticles = isRankingArticles,
         )
     }
 

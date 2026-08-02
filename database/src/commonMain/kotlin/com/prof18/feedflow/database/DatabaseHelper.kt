@@ -1342,7 +1342,6 @@ class DatabaseHelper(
     suspend fun getUnscoredItems(
         feedFilter: FeedFilter,
         showReadItems: Boolean,
-        limit: Long,
     ): List<UnscoredItem> = withContext(backgroundDispatcher) {
         dbRef.feedItemQueries.selectUnscoredItems(
             feedSourceId = feedFilter.getFeedSourceId(),
@@ -1351,7 +1350,6 @@ class DatabaseHelper(
             isBookmarked = feedFilter.getBookmarkFlag(),
             isUncategorized = feedFilter.getIsUncategorized(),
             isHidden = feedFilter.getIsHiddenFromTimelineFlag(),
-            limit = limit,
         ).executeAsList().map {
             UnscoredItem(id = it.url_hash, title = it.title.orEmpty(), subtitle = it.subtitle)
         }

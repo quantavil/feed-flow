@@ -11,7 +11,3 @@ enum class FeedOrder(val sqlValue: String) {
 const val NEUTRAL_RELEVANCE_SCORE = 50
 const val MIN_RELEVANCE_SCORE = 0
 const val MAX_RELEVANCE_SCORE = 100
-
-// The rubric's top band, "major breaking news with wide consequence". Marking only these keeps
-// the list readable: a number on every row is noise, a marker on the few big stories is signal.
-const val TOP_STORY_RELEVANCE_SCORE = 90

@@ -348,8 +348,7 @@
     <string name="settings_feed_order_most_relevant">Most Relevant</string>
     <string name="settings_feed_order_most_relevant_hint">Ranked by AI. Unranked articles keep their date order.</string>
     <string name="settings_feed_order_most_relevant_no_key">Needs an AI API key in Settings</string>
-    <string name="feed_top_story_label">Top story</string>
-    <string name="feed_ranking_message">Ranking articles…</string>
+    <string name="feed_relevance_score_label">AI relevance score</string>
     <string name="reader_mode_archive_button">Open in archive.is</string>
     <string name="reader_mode_browser_button_content_description">Open in browser</string>
     <string name="reader_mode_comments_button_content_description">Open comments</string>

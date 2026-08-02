@@ -19,13 +19,10 @@ import kotlinx.serialization.json.JsonElement
 const val GEMINI_MODELS_URL = "https://generativelanguage.googleapis.com/v1beta/models/"
 const val DEFAULT_AI_MODEL = "gemini-3.5-flash-lite"
 
-/** How much of a single article a summary is allowed to consider. */
-const val MAX_ARTICLE_TEXT_LENGTH = 10000
-
 /**
- * Hard cap on what any one request may carry, whatever the caller built it from. A separate
- * concern from [MAX_ARTICLE_TEXT_LENGTH]: batched callers pack many short inputs into one
- * request and need to know where the request itself stops, not where an article does.
+ * Hard cap on what any one request may carry, whatever the caller built it from: how much of a
+ * single article a summary sees, and how many headlines fit in one relevance batch. This is the
+ * cost dial for both features - raising it buys longer summaries and fewer, larger batches.
  */
 const val MAX_REQUEST_INPUT_LENGTH = 10000
 
@@ -210,5 +207,4 @@ internal data class GeminiPromptFeedback(
 @Serializable
 internal data class GeminiError(
     val message: String? = null,
-    val status: String? = null,
 )

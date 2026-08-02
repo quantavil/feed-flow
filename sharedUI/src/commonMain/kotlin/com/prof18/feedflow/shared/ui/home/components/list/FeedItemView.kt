@@ -155,7 +155,7 @@ internal fun FeedItemView(
                 ),
         ) {
             CompositionLocalProvider(LocalLayoutDirection provides contentLayoutDirection) {
-                TopStoryLabel(
+                RelevanceScoreLabel(
                     feedItem = feedItem,
                     feedItemDisplaySettings = feedItemDisplaySettings,
                 )

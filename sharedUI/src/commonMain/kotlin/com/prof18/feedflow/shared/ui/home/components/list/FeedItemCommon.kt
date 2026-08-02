@@ -32,7 +32,6 @@ import com.prof18.feedflow.core.model.FeedFilter
 import com.prof18.feedflow.core.model.FeedFontSizes
 import com.prof18.feedflow.core.model.FeedItem
 import com.prof18.feedflow.core.model.FeedItemDisplaySettings
-import com.prof18.feedflow.core.model.TOP_STORY_RELEVANCE_SCORE
 import com.prof18.feedflow.shared.ui.components.FeedSourceLogoImage
 import com.prof18.feedflow.shared.ui.home.components.FeedItemHeroImage
 import com.prof18.feedflow.shared.ui.home.components.FeedItemImage
@@ -40,36 +39,36 @@ import com.prof18.feedflow.shared.ui.style.Spacing
 import com.prof18.feedflow.shared.ui.utils.LocalFeedFlowStrings
 
 private val ImageCardUnreadDotSize = 9.dp
-private val TopStoryIconSize = 14.dp
+private val RelevanceScoreIconSize = 14.dp
 private const val ReadTextAlpha = 0.6f
 private const val ReadImageAlpha = 0.76f
 
 /**
- * Marks only the articles in the rubric's top band, and only while the list is ranked. Anything
- * unscored simply shows nothing, which is the honest signal: it has not been judged yet.
+ * Shows the score the model gave the article, and only while the list is ranked. Anything unscored
+ * shows nothing, which is the honest signal: it has not been judged yet.
  */
 @Composable
-internal fun TopStoryLabel(
+internal fun RelevanceScoreLabel(
     feedItem: FeedItem,
     feedItemDisplaySettings: FeedItemDisplaySettings,
     modifier: Modifier = Modifier,
 ) {
     if (!feedItemDisplaySettings.isRelevanceSortActive) return
-    if ((feedItem.relevanceScore ?: 0) < TOP_STORY_RELEVANCE_SCORE) return
+    val score = feedItem.relevanceScore ?: return
 
     Row(
         modifier = modifier.padding(bottom = Spacing.xsmall),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
-            modifier = Modifier.size(TopStoryIconSize),
+            modifier = Modifier.size(RelevanceScoreIconSize),
             imageVector = Icons.Outlined.AutoAwesome,
-            contentDescription = null,
+            contentDescription = LocalFeedFlowStrings.current.feedRelevanceScoreLabel,
             tint = MaterialTheme.colorScheme.primary,
         )
         Text(
             modifier = Modifier.padding(start = Spacing.xsmall),
-            text = LocalFeedFlowStrings.current.feedTopStoryLabel,
+            text = score.toString(),
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.primary,
@@ -249,7 +248,7 @@ internal fun FeedItemImageCardContent(
                     vertical = Spacing.regular,
                 ),
         ) {
-            TopStoryLabel(
+            RelevanceScoreLabel(
                 feedItem = feedItem,
                 feedItemDisplaySettings = feedItemDisplaySettings,
             )

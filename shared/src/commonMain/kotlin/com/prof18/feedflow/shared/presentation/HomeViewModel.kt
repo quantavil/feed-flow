@@ -151,8 +151,6 @@ class HomeViewModel internal constructor(
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, FeedItemDisplaySettings())
 
-    val isRankingArticles: StateFlow<Boolean> = articleRelevanceRepository.isRanking
-
     val feedFontSizeState: StateFlow<FeedFontSizes> = feedFontSizeRepository.feedFontSizeState
 
     val viewMenuState: StateFlow<HomeViewMenuState> = combine(
@@ -340,11 +338,10 @@ class HomeViewModel internal constructor(
     }
 
     /**
-     * Cancels whatever run is already in flight rather than queueing behind it. A run is up to two
-     * hundred headlines spread over a batch per second, so letting it finish means the feed the
-     * user just opened sits behind minutes of scoring for a feed they have left - which is what
-     * "Ranking articles" appearing to hang actually is. Scores are committed per batch, so the
-     * batches already paid for survive the cancel.
+     * Cancels whatever run is already in flight rather than queueing behind it. A run scores every
+     * unscored article in the filter, so letting it finish means the feed the user just opened
+     * sits behind minutes of scoring for a feed they have left. Scores are committed per batch, so
+     * the batches already paid for survive the cancel.
      */
     private fun rankArticles() {
         val previousRun = rankingJob

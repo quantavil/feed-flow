@@ -36,7 +36,6 @@ data class HomeDisplayState(
     val isGridLayoutEnabled: Boolean,
     val isSyncUploadRequired: Boolean = false,
     val feedItemDisplaySettings: FeedItemDisplaySettings = FeedItemDisplaySettings(),
-    val isRankingArticles: Boolean = false,
 )
 
 @Stable

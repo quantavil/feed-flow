@@ -18,32 +18,6 @@ import com.prof18.feedflow.shared.ui.style.Spacing
 import com.prof18.feedflow.shared.ui.utils.ConditionalAnimatedVisibility
 import com.prof18.feedflow.shared.ui.utils.LocalFeedFlowStrings
 
-/**
- * Ranking runs after the refresh has already finished, so without this the list silently
- * reshuffles itself a few seconds later and reads as a glitch.
- */
-@Composable
-fun ArticleRankingLoader(
-    isRanking: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    ConditionalAnimatedVisibility(
-        visible = isRanking,
-        enter = fadeIn(animationSpec = tween(durationMillis = 350)),
-        exit = fadeOut(animationSpec = tween(durationMillis = 350)),
-    ) {
-        Text(
-            modifier = modifier
-                .fillMaxWidth()
-                .padding(horizontal = Spacing.regular),
-            text = LocalFeedFlowStrings.current.feedRankingMessage,
-            textAlign = TextAlign.Center,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.primary,
-        )
-    }
-}
-
 @Composable
 fun FeedLoader(
     loadingState: FeedUpdateStatus,

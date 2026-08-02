@@ -1,7 +1,7 @@
 package com.prof18.feedflow.shared.data
 
 import com.prof18.feedflow.core.model.ArticleAiService
-import com.prof18.feedflow.core.model.MAX_ARTICLE_TEXT_LENGTH
+import com.prof18.feedflow.core.model.MAX_REQUEST_INPUT_LENGTH
 import com.prof18.feedflow.database.DatabaseHelper
 
 class ArticleSummaryRepository(
@@ -12,9 +12,9 @@ class ArticleSummaryRepository(
     suspend fun summarise(articleId: String, articleHtml: String): String {
         val model = aiSettingsRepository.getModel()
         val systemPrompt = aiSettingsRepository.getSystemPrompt()
-        // Truncated here rather than in the service: this is the article-length limit, and it has
-        // to be applied before the hash or the cache key would not describe what was sent.
-        val articleText = htmlToPlainText(articleHtml).take(MAX_ARTICLE_TEXT_LENGTH)
+        // Truncated here as well as in the service: the cut has to happen before the hash or the
+        // cache key would not describe what was actually sent.
+        val articleText = htmlToPlainText(articleHtml).take(MAX_REQUEST_INPUT_LENGTH)
         // Model and prompt are both part of the key, so changing either produces a fresh summary
         // instead of replaying one the previous settings wrote.
         val contentHash = contentHash(model, systemPrompt, articleText)

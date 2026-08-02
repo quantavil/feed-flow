@@ -11,12 +11,8 @@ import com.prof18.feedflow.core.model.MIN_RELEVANCE_SCORE
 import com.prof18.feedflow.database.DatabaseHelper
 import com.prof18.feedflow.database.UnscoredItem
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -52,17 +48,12 @@ class ArticleRelevanceRepository(
     private val logger: Logger,
     private val json: Json = Json { ignoreUnknownKeys = true },
 ) {
-    private val mutableIsRanking = MutableStateFlow(false)
-
-    /** True only while a scoring run is genuinely in flight. */
-    val isRanking: StateFlow<Boolean> = mutableIsRanking.asStateFlow()
-
     /**
      * No-op unless the user is actually sorting by relevance and has a key configured, so the
      * default chronological timeline never spends a request.
      *
-     * Scoped to [feedFilter] so the budget goes on the list currently on screen rather than on
-     * feeds the user is not reading.
+     * Scores everything unscored in [feedFilter], however long that takes: the run is paced to
+     * stay inside the free tier's request budget and the caller cancels it when the user moves on.
      *
      * @return true when at least one score was written, meaning the caller should re-publish.
      */
@@ -72,32 +63,14 @@ class ArticleRelevanceRepository(
         // Checked before the key so the Keystore is not touched at all while AI is off.
         if (aiSettingsRepository.getApiKey().isNullOrBlank()) return false
 
-        // Raised only once the early returns are behind us: on date sorting this method does
-        // nothing, and a flag set before them makes the progress banner flash on every refresh.
-        // Callers are responsible for not overlapping runs; HomeViewModel cancels the previous
-        // one, which is what keeps a refresh, a feed switch and a sort change to a single run.
-        mutableIsRanking.update { true }
-        return try {
-            scoreUnscoredItems(feedFilter, showReadItems)
-        } finally {
-            mutableIsRanking.update { false }
-        }
-    }
-
-    private suspend fun scoreUnscoredItems(feedFilter: FeedFilter, showReadItems: Boolean): Boolean {
         // Counts as a change on its own: the visible list and the pagination cursor are still
         // ordered by scores that no longer exist, so the caller has to re-publish even if every
         // request below then fails.
         var wroteAny = discardScoresFromAnotherModel()
-        val items = databaseHelper.getUnscoredItems(
-            feedFilter = feedFilter,
-            showReadItems = showReadItems,
-            limit = MAX_ITEMS_PER_RUN,
-        )
+        val items = databaseHelper.getUnscoredItems(feedFilter, showReadItems)
         for ((index, batch) in batchesUnderPromptBudget(items).withIndex()) {
-            // A run can be a dozen batches back to back and Gemini bills requests per minute, so
-            // fired without a gap the tail of the run reliably trips a 429 - which aborts the
-            // whole run below and leaves everything unscored, to be paid for again next refresh.
+            // Gemini's free tier allows 15 requests a minute and one 429 aborts the whole run
+            // below, leaving everything after it unscored and paid for again next refresh.
             if (index > 0) {
                 delay(BATCH_INTERVAL_MILLIS)
             }
@@ -118,11 +91,9 @@ class ArticleRelevanceRepository(
     }
 
     private suspend fun scoreBatch(batch: List<UnscoredItem>): Map<String, Int> {
-        val prompt = batch.mapIndexed(::promptLine).joinToString("\n")
-
         val reply = articleAiService.complete(
             systemPrompt = RELEVANCE_SYSTEM_PROMPT,
-            input = prompt,
+            input = batch.mapIndexed(::promptLine).joinToString("\n"),
             responseSchema = RELEVANCE_RESPONSE_SCHEMA,
         )
         return parseScores(reply, batch, json)
@@ -143,8 +114,9 @@ class ArticleRelevanceRepository(
     }
 
     private companion object {
-        const val MAX_ITEMS_PER_RUN = 200L
-        const val BATCH_INTERVAL_MILLIS = 1000L
+        // 15 requests a minute is the free-tier ceiling, so a batch every four seconds is the
+        // fastest a run may go.
+        const val BATCH_INTERVAL_MILLIS = 4000L
 
         // Bump when RELEVANCE_SYSTEM_PROMPT changes in a way that shifts the scale.
         // 2: moved to the native Gemini endpoint with a response schema.
@@ -192,10 +164,10 @@ internal fun batchesUnderPromptBudget(items: List<UnscoredItem>): List<List<Unsc
 }
 
 /**
- * Maps the model's reply back onto the batch. Entries are read one at a time so a single
- * malformed row costs one score instead of the whole batch, and anything unrecognised is
- * dropped rather than guessed at: an unscored article sorts as average, a wrongly scored one
- * sorts wrongly until the model changes.
+ * Maps the model's reply back onto the batch. Rows are read one at a time so a single malformed
+ * entry costs one score instead of the whole batch, and anything unrecognised is dropped rather
+ * than guessed at: an unscored article sorts as average, a wrongly scored one sorts wrongly until
+ * the model changes.
  */
 internal fun parseScores(reply: String, batch: List<UnscoredItem>, json: Json): Map<String, Int> {
     val entries = runCatching {
@@ -203,16 +175,14 @@ internal fun parseScores(reply: String, batch: List<UnscoredItem>, json: Json): 
     }.getOrElse { return emptyMap() }
 
     return entries.mapNotNull { element ->
-        val fields = runCatching { element.jsonObject }.getOrNull() ?: return@mapNotNull null
-        val index = fields["i"]?.intOrNull() ?: return@mapNotNull null
-        val score = fields["s"]?.intOrNull() ?: return@mapNotNull null
-        val item = batch.getOrNull(index) ?: return@mapNotNull null
-        item.id to score.coerceIn(MIN_RELEVANCE_SCORE, MAX_RELEVANCE_SCORE)
+        runCatching {
+            val fields = element.jsonObject
+            val item = batch[fields.getValue("i").jsonPrimitive.int]
+            item.id to fields.getValue("s").jsonPrimitive.int
+                .coerceIn(MIN_RELEVANCE_SCORE, MAX_RELEVANCE_SCORE)
+        }.getOrNull()
     }.toMap()
 }
-
-private fun kotlinx.serialization.json.JsonElement.intOrNull(): Int? =
-    runCatching { jsonPrimitive.intOrNull }.getOrNull()
 
 // Providers still wrap JSON in a markdown fence often enough to be worth handling.
 private fun String.unwrapJsonArray(): String {

@@ -1859,7 +1859,7 @@ class HomeViewModelTest : KoinTestBase() {
 
         viewModel.updateFeedOrder(FeedOrder.MOST_RELEVANT)
         advanceUntilIdle()
-        assertTrue(viewModel.isRankingArticles.value)
+        assertEquals(1, gatedAiService.callCount)
 
         // The list view only asks for a page when its "near the end" flag flips, so a page
         // dropped here is never asked for again and infinite scroll stays dead.
@@ -1896,11 +1896,9 @@ class HomeViewModelTest : KoinTestBase() {
 
         viewModel.updateFeedOrder(FeedOrder.MOST_RELEVANT)
         advanceUntilIdle()
-        assertTrue(viewModel.isRankingArticles.value)
 
         // Opening a feed is a newer intent than the run already in flight: without cancelling it,
-        // the run for the feed the user left keeps the banner up and the new feed goes unscored
-        // for as long as it takes to finish.
+        // the new feed goes unscored for as long as the run for the feed the user left takes.
         assertEquals(1, gatedAiService.callCount)
         viewModel.onFeedFilterSelected(FeedFilter.Source(sourceTwo))
         advanceUntilIdle()
@@ -2015,7 +2013,7 @@ class HomeViewModelTest : KoinTestBase() {
         override fun setApiKey(key: String): Boolean = true
     }
 
-    /** Holds a scoring run open so the test can act while [HomeViewModel.isRankingArticles] is true. */
+    /** Holds a scoring run open so the test can act while it is still in flight. */
     private class GatedArticleAiService : ArticleAiService {
         private val gate = CompletableDeferred<Unit>()
 
