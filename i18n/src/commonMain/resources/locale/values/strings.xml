@@ -447,6 +447,7 @@
     <string name="ai_summary_generic_error">Could not generate the summary.</string>
     <string name="ai_error_timeout">The request timed out. Try again.</string>
     <string name="ai_error_network">Network error. Check your connection and try again.</string>
+    <string name="ai_error_network_detail">Network error: %s</string>
     <string name="ai_error_provider">Gemini returned an error: %s</string>
     <string name="ai_error_parse">Could not read the response from Gemini.</string>
     <string name="ai_error_blocked">Gemini blocked this request.</string>

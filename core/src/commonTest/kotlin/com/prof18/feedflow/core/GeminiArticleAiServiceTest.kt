@@ -259,6 +259,28 @@ class GeminiArticleAiServiceTest {
         assertEquals(AiSummaryError.TIMEOUT, exception.error)
     }
 
+    // Every non-timeout transport failure is reported as one error, so without the type in the
+    // detail the screen shows "Network error" for a blocked host and for a bug in the request
+    // alike - and an exception carrying no message at all leaves nothing to go on.
+    @Test
+    fun `complete names the transport failure type even when it carries no message`() = runTest {
+        val mockEngine = MockEngine { throw IllegalStateException() }
+        val service = GeminiArticleAiService(HttpClient(mockEngine)) { config(apiKey = "key") }
+
+        val exception = assertFailsWith<AiSummaryException> { service.complete("Prompt", "Text") }
+        assertEquals(AiSummaryError.NETWORK, exception.error)
+        assertEquals("IllegalStateException", exception.detail)
+    }
+
+    @Test
+    fun `complete keeps both the type and the message when the failure has one`() = runTest {
+        val mockEngine = MockEngine { throw IllegalStateException("Unable to resolve host") }
+        val service = GeminiArticleAiService(HttpClient(mockEngine)) { config(apiKey = "key") }
+
+        val exception = assertFailsWith<AiSummaryException> { service.complete("Prompt", "Text") }
+        assertEquals("IllegalStateException: Unable to resolve host", exception.detail)
+    }
+
     @Test
     fun `complete makes no request at all when the api key is missing`() = runTest {
         var requestCount = 0

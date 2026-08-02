@@ -114,7 +114,12 @@ class GeminiArticleAiService(
             e.message?.contains("timeout", ignoreCase = true) == true
         return AiSummaryException(
             error = if (timedOut) AiSummaryError.TIMEOUT else AiSummaryError.NETWORK,
-            detail = e.message,
+            // The type as well as the message: everything the transport throws that is not a
+            // timeout is reported as one error, and UnknownHostException carries only a hostname
+            // while NetworkOnMainThreadException carries nothing at all. Without the type, a
+            // blocked host and a bug in the request are the same string on screen.
+            detail = listOfNotNull(e::class.simpleName, e.message?.takeIf { it.isNotBlank() })
+                .joinToString(": "),
             cause = e,
         )
     }

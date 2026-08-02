@@ -308,6 +308,7 @@ private fun getCoreModule(appConfig: AppConfig) = module {
             aiSettingsRepository = get(),
             articleAiService = get(),
             feedAppearanceSettingsRepository = get(),
+            logger = getWith("AiSettingsViewModel"),
         )
     }
 

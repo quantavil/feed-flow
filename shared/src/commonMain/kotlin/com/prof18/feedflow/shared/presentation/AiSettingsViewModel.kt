@@ -2,6 +2,7 @@ package com.prof18.feedflow.shared.presentation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import co.touchlab.kermit.Logger
 import com.prof18.feedflow.core.model.AiSummaryError
 import com.prof18.feedflow.core.model.AiSummaryException
 import com.prof18.feedflow.core.model.ArticleAiService
@@ -35,6 +36,7 @@ class AiSettingsViewModel(
     private val aiSettingsRepository: AiSettingsRepository,
     private val articleAiService: ArticleAiService,
     private val feedAppearanceSettingsRepository: FeedAppearanceSettingsRepository,
+    private val logger: Logger,
 ) : ViewModel() {
 
     private val mutableSettingsState = MutableStateFlow(
@@ -123,6 +125,9 @@ class AiSettingsViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: AiSummaryException) {
+                // The screen shows one line; the stack trace is what says whether the host was
+                // unreachable, the key was rejected, or the request never left the device.
+                logger.e(e) { "AI test connection failed with ${e.error}: ${e.detail}" }
                 AiTestState.Error(e)
             }
             mutableTestState.value = result
