@@ -16,6 +16,7 @@ import com.prof18.feedflow.core.model.FeedItemDisplaySettings
 import com.prof18.feedflow.core.model.FeedItemId
 import com.prof18.feedflow.core.model.FeedLayout
 import com.prof18.feedflow.core.model.FeedOperation
+import com.prof18.feedflow.core.model.FeedOrder
 import com.prof18.feedflow.core.model.FeedSource
 import com.prof18.feedflow.core.model.FeedSourceCategory
 import com.prof18.feedflow.core.model.FeedSourceWithUnreadCount
@@ -26,6 +27,8 @@ import com.prof18.feedflow.core.model.VisibleFeedItem
 import com.prof18.feedflow.core.model.canonical
 import com.prof18.feedflow.core.model.canonicalCategoryName
 import com.prof18.feedflow.core.model.trimmed
+import com.prof18.feedflow.shared.data.AiSettingsRepository
+import com.prof18.feedflow.shared.data.ArticleRelevanceRepository
 import com.prof18.feedflow.shared.data.FeedAppearanceSettingsRepository
 import com.prof18.feedflow.shared.data.SettingsRepository
 import com.prof18.feedflow.shared.domain.feed.FeedActionsRepository
@@ -77,6 +80,8 @@ class HomeViewModel internal constructor(
     private val feedStateRepository: FeedStateRepository,
     private val feedFetcherRepository: FeedFetcherRepository,
     private val getNextFeedFilterOrNullUseCase: GetNextFeedFilterOrNullUseCase,
+    private val articleRelevanceRepository: ArticleRelevanceRepository,
+    private val aiSettingsRepository: AiSettingsRepository,
 ) : ViewModel() {
 
     // Loading
@@ -115,6 +120,7 @@ class HomeViewModel internal constructor(
     private val pendingScrollReadIds = mutableSetOf<FeedItemId>()
     private var scrollReadDebounceJob: Job? = null
     private var hasTriggeredAppLaunch = false
+    private var pageRequestDeferredWhileRanking = false
 
     val currentFeedFilter = feedStateRepository.currentFeedFilter
     val isSyncUploadRequired: StateFlow<Boolean> = settingsRepository.isSyncUploadRequired
@@ -125,26 +131,42 @@ class HomeViewModel internal constructor(
         feedAppearanceSettingsRepository.hideUnreadDot,
         feedAppearanceSettingsRepository.hideFeedSource,
         feedAppearanceSettingsRepository.descriptionLineLimit,
-    ) { hideUnreadDot, hideFeedSource, descriptionLineLimit ->
+        feedAppearanceSettingsRepository.feedOrder,
+    ) { hideUnreadDot, hideFeedSource, descriptionLineLimit, feedOrder ->
         FeedItemDisplaySettings(
             isHideUnreadDotEnabled = hideUnreadDot,
             isHideFeedSourceEnabled = hideFeedSource,
             descriptionLineLimit = descriptionLineLimit,
+            isRelevanceSortActive = feedOrder == FeedOrder.MOST_RELEVANT,
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, FeedItemDisplaySettings())
+
+    val isRankingArticles: StateFlow<Boolean> = articleRelevanceRepository.isRanking
 
     val feedFontSizeState: StateFlow<FeedFontSizes> = feedFontSizeRepository.feedFontSizeState
 
     val viewMenuState: StateFlow<HomeViewMenuState> = combine(
         feedAppearanceSettingsRepository.feedOrder,
         settingsRepository.showReadArticlesTimelineFlow,
-    ) { order, showRead -> HomeViewMenuState(order, showRead) }
+        aiSettingsRepository.hasApiKey,
+        aiSettingsRepository.isAiEnabled,
+    ) { order, showRead, hasApiKey, isAiEnabled ->
+        HomeViewMenuState(
+            feedOrder = order,
+            showReadArticlesTimeline = showRead,
+            isRelevanceSortVisible = isAiEnabled,
+            isRelevanceSortAvailable = isAiEnabled && hasApiKey,
+        )
+    }
         .stateIn(
             viewModelScope,
             SharingStarted.Eagerly,
             HomeViewMenuState(
                 feedOrder = feedAppearanceSettingsRepository.getFeedOrder(),
                 showReadArticlesTimeline = settingsRepository.getShowReadArticlesTimeline(),
+                isRelevanceSortVisible = aiSettingsRepository.isAiEnabled.value,
+                isRelevanceSortAvailable = aiSettingsRepository.isAiEnabled.value &&
+                    aiSettingsRepository.hasApiKey.value,
             ),
         )
 
@@ -300,6 +322,27 @@ class HomeViewModel internal constructor(
         launchAfterFlushingScrollReadState {
             retryPendingReadStatusActionsNow()
             feedFetcherRepository.fetchFeeds(isFirstLaunch = isFirstLaunch, forceRefresh = forceRefresh)
+            // Deliberately not inside FeedFetcherRepository: scoring needs the API key store,
+            // which would drag the Android Keystore into every sync path and every sync test.
+            // Runs after the list is published so the refresh spinner is never held for it.
+            rankArticles()
+        }
+    }
+
+    private suspend fun rankArticles() {
+        val wroteScores = articleRelevanceRepository.scoreIfNeeded(
+            feedFilter = feedStateRepository.getCurrentFeedFilter(),
+            showReadItems = settingsRepository.getShowReadArticlesTimeline(),
+        )
+        if (wroteScores) {
+            feedStateRepository.getFeeds()
+        }
+        // Replayed after the republish, never before it: getFeeds resets the list to the first
+        // page, so a page loaded any earlier is thrown away and the list is still short.
+        // A concurrent run may hold the scoring lock, in which case that one replays instead.
+        if (pageRequestDeferredWhileRanking && !articleRelevanceRepository.isRanking.value) {
+            pageRequestDeferredWhileRanking = false
+            feedStateRepository.loadMoreFeeds()
         }
     }
 
@@ -329,6 +372,14 @@ class HomeViewModel internal constructor(
     }
 
     fun requestNewFeedsPage() {
+        // Keyset pagination is keyed on relevance_score. Scoring mutates that column in
+        // batches, so a page loaded mid-rank can skip rows that moved above the cursor or
+        // re-append rows that dropped below it. Deferred rather than dropped: the list view
+        // only asks again when its "near the end" flag flips, which a dropped page never does.
+        if (articleRelevanceRepository.isRanking.value) {
+            pageRequestDeferredWhileRanking = true
+            return
+        }
         viewModelScope.launch {
             feedStateRepository.loadMoreFeeds()
         }
@@ -430,6 +481,8 @@ class HomeViewModel internal constructor(
     fun onFeedFilterSelected(selectedFeedFilter: FeedFilter) {
         launchAfterFlushingScrollReadState {
             feedStateRepository.updateFeedFilter(selectedFeedFilter)
+            // Opening a feed or category changes which articles are worth ranking.
+            rankArticles()
         }
 
         updateNextFeedPreview(selectedFeedFilter)
@@ -651,10 +704,13 @@ class HomeViewModel internal constructor(
 
     fun getCurrentThemeMode() = settingsRepository.getThemeMode()
 
-    fun updateFeedOrder(order: com.prof18.feedflow.core.model.FeedOrder) {
+    fun updateFeedOrder(order: FeedOrder) {
         launchAfterFlushingScrollReadState {
             feedAppearanceSettingsRepository.setFeedOrder(order)
+            // Re-order with whatever scores already exist first, so the list responds
+            // immediately, then again if scoring the rest actually changed something.
             feedStateRepository.getFeeds()
+            rankArticles()
         }
     }
 

@@ -198,6 +198,37 @@ class FeedStateRepositoryPaginationTest : KoinTestBase() {
         assertEquals(expectedIds, feedStateRepository.feedState.value.map { it.id })
     }
 
+    @Test
+    fun `loadMoreFeeds paginates across relevance bands including unscored items`() = runTest {
+        // Unscored rows sort at NEUTRAL_RELEVANCE_SCORE, so the cursor has to carry the same
+        // COALESCE default or the second page starts in the wrong band and returns nothing.
+        val topStories = List(PAGE_SIZE - 5) { index ->
+            unreadItem(index, pubDate = BASE_PUB_DATE - index * PUB_DATE_STEP)
+        }
+        val unscored = List(10) { index ->
+            unreadItem(TOP_STORY_COUNT + index, pubDate = BASE_PUB_DATE - (TOP_STORY_COUNT + index) * PUB_DATE_STEP)
+        }
+        val filler = List(10) { index ->
+            unreadItem(
+                FILLER_ID_OFFSET + index,
+                pubDate = BASE_PUB_DATE - (FILLER_ID_OFFSET + index) * PUB_DATE_STEP,
+            )
+        }
+        seed(topStories + unscored + filler, feedOrder = FeedOrder.MOST_RELEVANT)
+        databaseHelper.updateRelevanceScores(
+            topStories.associate { it.id to HIGH_SCORE } + filler.associate { it.id to LOW_SCORE },
+        )
+
+        feedStateRepository.getFeeds()
+        assertEquals(PAGE_SIZE, feedStateRepository.feedState.value.size)
+        feedStateRepository.loadMoreFeeds()
+
+        val expectedIds = (topStories + unscored + filler).map { it.id }
+        val loadedIds = feedStateRepository.feedState.value.map { it.id }
+        assertEquals(expectedIds, loadedIds)
+        assertEquals(loadedIds.size, loadedIds.toSet().size)
+    }
+
     private suspend fun markCurrentPageAsReadInDb() {
         val ids = feedStateRepository.feedState.value.map { FeedItemId(it.id) }
         databaseHelper.updateReadStatus(ids, isRead = true)
@@ -235,5 +266,9 @@ class FeedStateRepositoryPaginationTest : KoinTestBase() {
         const val PUB_DATE_STEP = 1_000L
         const val REMOVED_ITEMS_COUNT = 10
         const val ID_PADDING = 3
+        val TOP_STORY_COUNT = PAGE_SIZE - 5
+        val FILLER_ID_OFFSET = PAGE_SIZE + 5
+        const val HIGH_SCORE = 90
+        const val LOW_SCORE = 10
     }
 }

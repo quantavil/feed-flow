@@ -137,6 +137,7 @@ class SearchFeedMapperTest {
         notification_sent = false,
         is_blocked = false,
         content_fetched = false,
+        relevance_score = null,
         feed_source_title = "Feed Source",
         feed_source_id_ = "source-1",
         feed_source_url = "https://example.com/feed.xml",

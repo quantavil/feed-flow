@@ -124,6 +124,10 @@ internal actual fun getPlatformModule(appEnvironment: AppEnvironment): Module = 
         PreferencesSettings(preferences.node(nodeName))
     }
 
+    single<com.prof18.feedflow.shared.data.ApiKeyStorage> {
+        com.prof18.feedflow.shared.data.NoOpApiKeyStorage()
+    }
+
     single {
         DesktopWindowSettingsRepository(
             settings = get(),

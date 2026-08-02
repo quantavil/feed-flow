@@ -12,6 +12,10 @@ fun getReaderModeStyledHtml(
     imageUrl: String? = null,
     leadingContent: String = "",
     siteName: String? = null,
+    // Non-null renders the collapsible AI summary card inside the article flow. The host is
+    // responsible for handling the "aiSummary" bridge call and pushing results back through
+    // window.__ffAi.render(state, text, actionLabel).
+    aiSummaryTitle: String? = null,
 ): String {
     val titleTag = if (title != null) {
         "<h1>${title.escapeHtml()}</h1>"
@@ -39,6 +43,21 @@ fun getReaderModeStyledHtml(
         contentWithSubtitle
     }
 
+    val aiSummaryCard = if (aiSummaryTitle != null) {
+        """
+        <div id="__ff_ai" hidden>
+            <button type="button" id="__ff_ai_head" aria-expanded="false" aria-controls="__ff_ai_body">
+                <span id="__ff_ai_spark" aria-hidden="true">&#10022;</span>
+                <span id="__ff_ai_label">${aiSummaryTitle.escapeHtml()}</span>
+                <span id="__ff_ai_chevron" aria-hidden="true"></span>
+            </button>
+            <div id="__ff_ai_body" hidden></div>
+        </div>
+        """.trimIndent()
+    } else {
+        ""
+    }
+
     // language=html
     return """
     <html lang="en" dir='auto'>
@@ -56,8 +75,10 @@ fun getReaderModeStyledHtml(
             $processedContent
         </div>
     </div>
+    $aiSummaryCard
     <script>
         document.addEventListener("DOMContentLoaded", function () {
+            ${if (aiSummaryTitle != null) AI_SUMMARY_SCRIPT else ""}
             // Get the title from the first h1 (which we inject)
             var firstH1 = document.querySelector("h1");
             if (firstH1) {
@@ -145,6 +166,105 @@ fun getReaderModeStyledHtml(
         """
         .trimIndent()
 }
+
+// Pushes a state into the AI summary card of an already-loaded reader page.
+fun readerAiSummaryRenderJs(state: String, text: String, actionLabel: String? = null): String =
+    "window.__ffAi && window.__ffAi.render(" +
+        "${state.toJsStringLiteral()}, ${text.toJsStringLiteral()}, ${actionLabel?.toJsStringLiteral() ?: "null"});"
+
+private fun String.toJsStringLiteral(): String {
+    val builder = StringBuilder(length + 2)
+    builder.append('"')
+    for (char in this) {
+        when (char) {
+            '\\' -> builder.append("\\\\")
+            '"' -> builder.append("\\\"")
+            '\n' -> builder.append("\\n")
+            '\r' -> builder.append("\\r")
+            '\t' -> builder.append("\\t")
+            // Would close the surrounding inline <script> early.
+            '<' -> builder.append("\\u003C")
+            LINE_SEPARATOR, PARAGRAPH_SEPARATOR ->
+                builder.append("\\u").append(char.code.toString(HEX_RADIX))
+            else -> if (char < ' ') {
+                builder.append("\\u").append(char.code.toString(HEX_RADIX).padStart(UNICODE_ESCAPE_DIGITS, '0'))
+            } else {
+                builder.append(char)
+            }
+        }
+    }
+    builder.append('"')
+    return builder.toString()
+}
+
+private const val HEX_RADIX = 16
+private const val UNICODE_ESCAPE_DIGITS = 4
+
+// JS line terminators that are legal raw characters inside a JSON string.
+private const val LINE_SEPARATOR = '\u2028'
+private const val PARAGRAPH_SEPARATOR = '\u2029'
+
+// Moves the card next to the first paragraph so it reads as part of the article instead of a
+// banner pinned above it, then drives collapse/expand entirely in the page. Kotlin only pushes
+// state in through window.__ffAi.render.
+// language=js
+private val AI_SUMMARY_SCRIPT = """
+    (function () {
+        var card = document.getElementById("__ff_ai");
+        var content = document.getElementById("__content");
+        if (!card || !content) return;
+
+        var anchor = content.querySelector(":scope > p") || content.querySelector("p");
+        if (anchor && anchor.parentNode) {
+            anchor.parentNode.insertBefore(card, anchor);
+        } else {
+            content.insertBefore(card, content.firstChild);
+        }
+        card.hidden = false;
+
+        var head = document.getElementById("__ff_ai_head");
+        var body = document.getElementById("__ff_ai_body");
+        var requested = false;
+
+        function requestSummary() {
+            if (window.kmpJsBridge && window.kmpJsBridge.callNative) {
+                window.kmpJsBridge.callNative("aiSummary", "load", {});
+            }
+        }
+
+        head.addEventListener("click", function () {
+            var expanded = body.hidden;
+            body.hidden = !expanded;
+            head.setAttribute("aria-expanded", expanded ? "true" : "false");
+            card.classList.toggle("__ff_ai_open", expanded);
+            if (expanded && !requested) {
+                requested = true;
+                requestSummary();
+            }
+        });
+
+        window.__ffAi = {
+            render: function (state, text, actionLabel) {
+                body.innerHTML = "";
+                var paragraph = document.createElement("div");
+                paragraph.className = "__ff_ai_text";
+                if (state === "error") paragraph.className += " __ff_ai_error";
+                if (state === "loading") paragraph.className += " __ff_ai_muted";
+                // textContent, never innerHTML: this string comes back from a language model.
+                paragraph.textContent = text;
+                body.appendChild(paragraph);
+                if (state === "error" && actionLabel) {
+                    var retry = document.createElement("button");
+                    retry.type = "button";
+                    retry.id = "__ff_ai_retry";
+                    retry.textContent = actionLabel;
+                    retry.addEventListener("click", requestSummary);
+                    body.appendChild(retry);
+                }
+            }
+        };
+    })();
+""".trimIndent()
 
 private fun String.escapeHtml(): String =
     replace("&", "&amp;")
@@ -388,6 +508,87 @@ img, iframe, object, video {
     max-width: 100%;
     height: auto;
     border-radius: 7px;
+}
+
+[hidden] {
+    display: none !important;
+}
+
+#__ff_ai {
+    margin: 1.5em 0;
+    border: 1px solid var(--reader-border);
+    border-radius: 12px;
+    background-color: var(--reader-bg);
+    overflow: hidden;
+}
+
+#__ff_ai_head {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.85em 1em;
+    margin: 0;
+    background: none;
+    border: none;
+    color: var(--reader-text);
+    font: inherit;
+    font-weight: 700;
+    text-align: start;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+#__ff_ai_spark {
+    color: var(--reader-link);
+    line-height: 1;
+}
+
+#__ff_ai_label {
+    flex: 1;
+}
+
+#__ff_ai_chevron {
+    width: 0.45em;
+    height: 0.45em;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    transform: rotate(45deg) translate(-0.1em, -0.1em);
+    opacity: 0.6;
+    transition: transform 0.2s ease;
+}
+
+#__ff_ai.__ff_ai_open #__ff_ai_chevron {
+    transform: rotate(-135deg) translate(-0.1em, -0.1em);
+}
+
+#__ff_ai_body {
+    padding: 0 1em 1em 1em;
+}
+
+.__ff_ai_text {
+    white-space: pre-wrap;
+}
+
+.__ff_ai_muted {
+    opacity: 0.6;
+}
+
+.__ff_ai_error {
+    color: #e5534b;
+}
+
+#__ff_ai_retry {
+    margin-top: 0.85em;
+    padding: 0.5em 1.2em;
+    border: 1px solid var(--reader-border);
+    border-radius: 999px;
+    background: none;
+    color: var(--reader-link);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
 }
 
     """.trimIndent()

@@ -10,6 +10,7 @@ import com.prof18.feedflow.core.model.FeedListSettingsState
 import com.prof18.feedflow.core.model.SwipeActionType
 import com.prof18.feedflow.core.model.SwipeDirection
 import com.prof18.feedflow.core.model.TimeFormat
+import com.prof18.feedflow.shared.data.AiSettingsRepository
 import com.prof18.feedflow.shared.data.FeedAppearanceSettingsRepository
 import com.prof18.feedflow.shared.domain.feed.FeedFontSizeRepository
 import com.prof18.feedflow.shared.domain.feed.FeedStateRepository
@@ -20,6 +21,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 class FeedListSettingsViewModel internal constructor(
+    private val aiSettingsRepository: AiSettingsRepository,
     private val feedAppearanceSettingsRepository: FeedAppearanceSettingsRepository,
     private val fontSizeRepository: FeedFontSizeRepository,
     private val feedStateRepository: FeedStateRepository,
@@ -65,6 +67,7 @@ class FeedListSettingsViewModel internal constructor(
                 rightSwipeActionType = rightSwipeAction,
                 isRemoveTitleFromDescriptionEnabled = isRemoveTitleFromDescriptionEnabled,
                 feedOrder = feedOrder,
+                isRelevanceSortVisible = aiSettingsRepository.isAiEnabled.value,
                 isHideUnreadDotEnabled = isHideUnreadDotEnabled,
                 isHideFeedSourceEnabled = isHideFeedSourceEnabled,
                 descriptionLineLimit = descriptionLineLimit,

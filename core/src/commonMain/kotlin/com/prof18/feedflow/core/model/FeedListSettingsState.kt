@@ -16,6 +16,9 @@ data class FeedListSettingsState(
     val rightSwipeActionType: SwipeActionType = SwipeActionType.TOGGLE_BOOKMARK_STATUS,
     val isRemoveTitleFromDescriptionEnabled: Boolean = false,
     val feedOrder: FeedOrder = FeedOrder.NEWEST_FIRST,
+    // Relevance is only offered once the user has switched AI on, so the dropdown never lists an
+    // order the rest of the app is hiding.
+    val isRelevanceSortVisible: Boolean = false,
     val isHideUnreadDotEnabled: Boolean = false,
     val isHideFeedSourceEnabled: Boolean = false,
     val descriptionLineLimit: DescriptionLineLimit = DescriptionLineLimit.THREE,

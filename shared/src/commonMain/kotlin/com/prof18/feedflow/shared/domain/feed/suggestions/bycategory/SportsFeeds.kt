@@ -69,10 +69,34 @@ internal val sportsFeeds = SuggestedFeedCategory(
             logoUrl = "https://www.google.com/s2/favicons?domain=theguardian.com&sz=64",
         ),
         SuggestedFeed(
+            name = "The Hindu - Cricket",
+            url = "https://www.thehindu.com/sport/cricket/feeder/default.rss",
+            description = "Cricket news, match analysis, and updates",
+            logoUrl = "https://www.google.com/s2/favicons?domain=thehindu.com&sz=64",
+        ),
+        SuggestedFeed(
+            name = "The Hindu - Sports",
+            url = "https://www.thehindu.com/sport/feeder/default.rss",
+            description = "Indian and global sports coverage",
+            logoUrl = "https://www.google.com/s2/favicons?domain=thehindu.com&sz=64",
+        ),
+        SuggestedFeed(
             name = "The Independent - Sports",
             url = "https://www.the-independent.com/sport/rss",
             description = "Sports news and features",
             logoUrl = "https://www.google.com/s2/favicons?domain=the-independent.com&sz=64",
+        ),
+        SuggestedFeed(
+            name = "The Indian Express - Cricket",
+            url = "https://indianexpress.com/section/sports/cricket/feed/",
+            description = "Cricket coverage, scores, and match reports from India",
+            logoUrl = "https://www.google.com/s2/favicons?domain=indianexpress.com&sz=64",
+        ),
+        SuggestedFeed(
+            name = "The Indian Express - Sports",
+            url = "https://indianexpress.com/section/sports/feed/",
+            description = "Sports reporting, cricket, and athlete profiles from India",
+            logoUrl = "https://www.google.com/s2/favicons?domain=indianexpress.com&sz=64",
         ),
     ),
 )

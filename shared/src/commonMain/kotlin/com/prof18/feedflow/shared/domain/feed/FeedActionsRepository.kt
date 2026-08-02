@@ -139,13 +139,21 @@ internal class FeedActionsRepository(
 
     suspend fun markAllAboveAsRead(targetItemId: String) {
         val currentFilter = feedStateRepository.getCurrentFeedFilter()
-        val feedOrder = feedAppearanceSettingsRepository.getFeedOrder()
+        val newestFirst = when (feedAppearanceSettingsRepository.getFeedOrder()) {
+            FeedOrder.NEWEST_FIRST -> true
+            FeedOrder.OLDEST_FIRST -> false
+            // ponytail: position and date diverge under relevance ranking, so this would
+            // mark the wrong articles. The UI hides the action; this is the backstop.
+            // Upgrade path: compare the (relevance, pub_date, url_hash) tuple in SQL.
+            FeedOrder.MOST_RELEVANT -> return
+        }
 
         when (accountsRepository.getCurrentSyncAccount()) {
             SyncAccounts.FRESH_RSS, SyncAccounts.MINIFLUX, SyncAccounts.BAZQUX -> {
-                val itemIds = when (feedOrder) {
-                    FeedOrder.NEWEST_FIRST -> databaseHelper.getNewerItems(targetItemId, currentFilter)
-                    FeedOrder.OLDEST_FIRST -> databaseHelper.getOlderItems(targetItemId, currentFilter)
+                val itemIds = if (newestFirst) {
+                    databaseHelper.getNewerItems(targetItemId, currentFilter)
+                } else {
+                    databaseHelper.getOlderItems(targetItemId, currentFilter)
                 }
                 if (itemIds.isNotEmpty()) {
                     val feedItemIds = itemIds.map { FeedItemId(it) }
@@ -154,9 +162,10 @@ internal class FeedActionsRepository(
             }
 
             SyncAccounts.FEEDBIN -> {
-                val itemIds = when (feedOrder) {
-                    FeedOrder.NEWEST_FIRST -> databaseHelper.getNewerItems(targetItemId, currentFilter)
-                    FeedOrder.OLDEST_FIRST -> databaseHelper.getOlderItems(targetItemId, currentFilter)
+                val itemIds = if (newestFirst) {
+                    databaseHelper.getNewerItems(targetItemId, currentFilter)
+                } else {
+                    databaseHelper.getOlderItems(targetItemId, currentFilter)
                 }
                 if (itemIds.isNotEmpty()) {
                     val feedItemIds = itemIds.map { FeedItemId(it) }
@@ -169,9 +178,10 @@ internal class FeedActionsRepository(
             SyncAccounts.GOOGLE_DRIVE,
             SyncAccounts.ICLOUD,
             -> {
-                when (feedOrder) {
-                    FeedOrder.NEWEST_FIRST -> databaseHelper.markAllNewerAsRead(targetItemId, currentFilter)
-                    FeedOrder.OLDEST_FIRST -> databaseHelper.markAllOlderAsRead(targetItemId, currentFilter)
+                if (newestFirst) {
+                    databaseHelper.markAllNewerAsRead(targetItemId, currentFilter)
+                } else {
+                    databaseHelper.markAllOlderAsRead(targetItemId, currentFilter)
                 }
                 feedSyncRepository.setIsSyncUploadRequired()
             }
@@ -182,13 +192,21 @@ internal class FeedActionsRepository(
 
     suspend fun markAllBelowAsRead(targetItemId: String) {
         val currentFilter = feedStateRepository.getCurrentFeedFilter()
-        val feedOrder = feedAppearanceSettingsRepository.getFeedOrder()
+        val newestFirst = when (feedAppearanceSettingsRepository.getFeedOrder()) {
+            FeedOrder.NEWEST_FIRST -> true
+            FeedOrder.OLDEST_FIRST -> false
+            // ponytail: position and date diverge under relevance ranking, so this would
+            // mark the wrong articles. The UI hides the action; this is the backstop.
+            // Upgrade path: compare the (relevance, pub_date, url_hash) tuple in SQL.
+            FeedOrder.MOST_RELEVANT -> return
+        }
 
         when (accountsRepository.getCurrentSyncAccount()) {
             SyncAccounts.FRESH_RSS, SyncAccounts.MINIFLUX, SyncAccounts.BAZQUX -> {
-                val itemIds = when (feedOrder) {
-                    FeedOrder.NEWEST_FIRST -> databaseHelper.getOlderItems(targetItemId, currentFilter)
-                    FeedOrder.OLDEST_FIRST -> databaseHelper.getNewerItems(targetItemId, currentFilter)
+                val itemIds = if (newestFirst) {
+                    databaseHelper.getOlderItems(targetItemId, currentFilter)
+                } else {
+                    databaseHelper.getNewerItems(targetItemId, currentFilter)
                 }
                 if (itemIds.isNotEmpty()) {
                     val feedItemIds = itemIds.map { FeedItemId(it) }
@@ -197,9 +215,10 @@ internal class FeedActionsRepository(
             }
 
             SyncAccounts.FEEDBIN -> {
-                val itemIds = when (feedOrder) {
-                    FeedOrder.NEWEST_FIRST -> databaseHelper.getOlderItems(targetItemId, currentFilter)
-                    FeedOrder.OLDEST_FIRST -> databaseHelper.getNewerItems(targetItemId, currentFilter)
+                val itemIds = if (newestFirst) {
+                    databaseHelper.getOlderItems(targetItemId, currentFilter)
+                } else {
+                    databaseHelper.getNewerItems(targetItemId, currentFilter)
                 }
                 if (itemIds.isNotEmpty()) {
                     val feedItemIds = itemIds.map { FeedItemId(it) }
@@ -212,9 +231,10 @@ internal class FeedActionsRepository(
             SyncAccounts.GOOGLE_DRIVE,
             SyncAccounts.ICLOUD,
             -> {
-                when (feedOrder) {
-                    FeedOrder.NEWEST_FIRST -> databaseHelper.markAllOlderAsRead(targetItemId, currentFilter)
-                    FeedOrder.OLDEST_FIRST -> databaseHelper.markAllNewerAsRead(targetItemId, currentFilter)
+                if (newestFirst) {
+                    databaseHelper.markAllOlderAsRead(targetItemId, currentFilter)
+                } else {
+                    databaseHelper.markAllNewerAsRead(targetItemId, currentFilter)
                 }
                 feedSyncRepository.setIsSyncUploadRequired()
             }

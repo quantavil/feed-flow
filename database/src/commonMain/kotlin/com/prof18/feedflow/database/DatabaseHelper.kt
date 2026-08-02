@@ -24,6 +24,7 @@ import com.prof18.feedflow.core.model.FeedSourceCacheInfo
 import com.prof18.feedflow.core.model.FeedSourceCategory
 import com.prof18.feedflow.core.model.FeedSourceToNotify
 import com.prof18.feedflow.core.model.FeedSourceWithUnreadCount
+import com.prof18.feedflow.core.model.NEUTRAL_RELEVANCE_SCORE
 import com.prof18.feedflow.core.model.ParsedFeedSource
 import com.prof18.feedflow.core.model.PrefetchQueueItem
 import com.prof18.feedflow.core.model.SyncedFeedItem
@@ -135,6 +136,8 @@ class DatabaseHelper(
         sortOrder: FeedOrder,
         lastPubDate: Long? = null,
         lastUrlHash: String? = null,
+        // Only read when lastUrlHash is set and the order is relevance; the default is inert.
+        lastRelevanceScore: Long = NEUTRAL_RELEVANCE_SCORE.toLong(),
     ): List<SelectFeeds> = withContext(backgroundDispatcher) {
         dbRef.feedItemQueries
             .selectFeeds(
@@ -147,6 +150,7 @@ class DatabaseHelper(
                 isHidden = feedFilter.getIsHiddenFromTimelineFlag(),
                 lastUrlHash = lastUrlHash,
                 lastPubDate = lastPubDate,
+                lastRelevanceScore = lastRelevanceScore,
                 pageSize = pageSize,
             )
             .executeAsList()
@@ -166,6 +170,7 @@ class DatabaseHelper(
                 isHidden = 0,
                 lastUrlHash = null,
                 lastPubDate = null,
+                lastRelevanceScore = NEUTRAL_RELEVANCE_SCORE.toLong(),
                 pageSize = pageSize,
             )
             .asFlow()
@@ -254,15 +259,20 @@ class DatabaseHelper(
         dbRef.feedItemQueries.selectFeedItemContent(urlHash).executeAsOneOrNull()?.content
     }
 
+    // The scratch table is shared, so the clear/fill/read/clear cycle has to be atomic: two
+    // overlapping calls would otherwise see each other's ids and both return the wrong set.
+    // The transaction also collapses one commit per id into a single one.
     suspend fun getMissingFeedItemIds(feedItemIds: List<String>): Set<String> =
         withContext(backgroundDispatcher) {
-            dbRef.feedItemTempQueries.clearTempFeedItemIds()
-            feedItemIds.forEach { feedItemId ->
-                dbRef.feedItemTempQueries.insertTempFeedItemId(feedItemId)
+            dbRef.transactionWithResult {
+                dbRef.feedItemTempQueries.clearTempFeedItemIds()
+                feedItemIds.forEach { feedItemId ->
+                    dbRef.feedItemTempQueries.insertTempFeedItemId(feedItemId)
+                }
+                val missingIds = dbRef.feedItemTempQueries.selectMissingFeedItemIds().executeAsList().toSet()
+                dbRef.feedItemTempQueries.clearTempFeedItemIds()
+                missingIds
             }
-            val missingIds = dbRef.feedItemTempQueries.selectMissingFeedItemIds().executeAsList().toSet()
-            dbRef.feedItemTempQueries.clearTempFeedItemIds()
-            missingIds
         }
 
     suspend fun markAsRead(itemsToUpdates: List<FeedItemId>) =
@@ -1329,9 +1339,65 @@ class DatabaseHelper(
                 .map { FeedItemToPrefetch(feedItemId = it.url_hash, url = it.url) }
         }
 
+    suspend fun getUnscoredItems(
+        feedFilter: FeedFilter,
+        showReadItems: Boolean,
+        limit: Long,
+    ): List<UnscoredItem> = withContext(backgroundDispatcher) {
+        dbRef.feedItemQueries.selectUnscoredItems(
+            feedSourceId = feedFilter.getFeedSourceId(),
+            feedSourceCategoryId = feedFilter.getCategoryId(),
+            isRead = feedFilter.getIsReadFlag(showReadItems),
+            isBookmarked = feedFilter.getBookmarkFlag(),
+            isUncategorized = feedFilter.getIsUncategorized(),
+            isHidden = feedFilter.getIsHiddenFromTimelineFlag(),
+            limit = limit,
+        ).executeAsList().map {
+            UnscoredItem(id = it.url_hash, title = it.title.orEmpty(), subtitle = it.subtitle)
+        }
+    }
+
+    suspend fun updateRelevanceScores(scores: Map<String, Int>) =
+        dbRef.transactionWithContext(backgroundDispatcher) {
+            scores.forEach { (urlHash, score) ->
+                dbRef.feedItemQueries.updateRelevanceScore(score = score.toLong(), urlHash = urlHash)
+            }
+        }
+
+    suspend fun clearRelevanceScores() = withContext(backgroundDispatcher) {
+        dbRef.feedItemQueries.clearRelevanceScores()
+    }
+
+    suspend fun getArticleSummary(contentHash: String): String? = withContext(backgroundDispatcher) {
+        dbRef.articleSummaryQueries.getSummaryByContentHash(contentHash).executeAsOneOrNull()
+    }
+
+    suspend fun insertArticleSummary(
+        articleId: String,
+        contentHash: String,
+        summaryText: String,
+    ) = dbRef.transactionWithContext(backgroundDispatcher) {
+        val now = Clock.System.now().toEpochMilliseconds()
+        dbRef.articleSummaryQueries.insertSummary(
+            articleId = articleId,
+            contentHash = contentHash,
+            summaryText = summaryText,
+            createdAt = now,
+        )
+        // Nothing else prunes this table: the rows outlive the feed items they summarise.
+        dbRef.articleSummaryQueries.deleteSummariesOlderThan(now - SUMMARY_RETENTION_MILLIS)
+    }
+
     companion object {
+        private const val SUMMARY_RETENTION_MILLIS = 30L * 24 * 60 * 60 * 1000
         internal const val DB_FILE_NAME_WITH_EXTENSION = "FeedFlow.db"
         const val APP_DATABASE_NAME_PROD = "FeedFlowDB"
         const val APP_DATABASE_NAME_DEBUG = "FeedFlowDB-debug"
     }
 }
+
+data class UnscoredItem(
+    val id: String,
+    val title: String,
+    val subtitle: String?,
+)

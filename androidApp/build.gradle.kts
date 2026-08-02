@@ -141,6 +141,8 @@ baselineProfile {
 dependencies {
     implementation(project(":shared"))
     implementation(project(":sharedUI"))
+    // ponytail: the AI summary panel reads/writes its cache through DatabaseHelper directly.
+    // Upgrade path if this spreads: move the cache behind a repository in :shared and drop this.
     implementation(libs.androidx.profileinstaller)
     "baselineProfile"(project(":benchmarks"))
  

@@ -83,6 +83,7 @@ kotlin {
                 implementation(libs.koin.core)
                 implementation(libs.koin.core.vm)
                 implementation(libs.kotlinx.coroutines.core)
+                implementation(libs.kotlinx.serialization.json)
                 implementation(libs.com.prof18.rss.parser)
                 implementation(libs.csv)
                 implementation(libs.multiplatform.settings)
@@ -145,6 +146,7 @@ kotlin {
                 implementation(libs.koin.android)
                 implementation(libs.workmanager)
                 implementation(libs.koin.workmanager)
+                implementation(libs.androidx.security.crypto)
             }
         }
 

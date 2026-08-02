@@ -81,6 +81,12 @@ internal val technologyFeeds = SuggestedFeedCategory(
             logoUrl = "https://www.google.com/s2/favicons?domain=ycombinator.com&sz=64",
         ),
         SuggestedFeed(
+            name = "Inc42",
+            url = "https://inc42.com/feed/",
+            description = "Indian tech, startup ecosystem, and digital economy",
+            logoUrl = "https://www.google.com/s2/favicons?domain=inc42.com&sz=64",
+        ),
+        SuggestedFeed(
             name = "It's FOSS",
             url = "https://itsfoss.com/feed/",
             description = "Linux guides, news, and open source coverage",
@@ -115,6 +121,12 @@ internal val technologyFeeds = SuggestedFeedCategory(
             url = "https://www.macstories.net/feed/",
             description = "Apple software and productivity coverage",
             logoUrl = "https://www.google.com/s2/favicons?domain=macstories.net&sz=64",
+        ),
+        SuggestedFeed(
+            name = "MediaNama",
+            url = "https://www.medianama.com/feed/",
+            description = "Indian tech policy, data privacy, and telecom laws",
+            logoUrl = "https://www.google.com/s2/favicons?domain=medianama.com&sz=64",
         ),
         SuggestedFeed(
             name = "Mashable",
@@ -163,6 +175,18 @@ internal val technologyFeeds = SuggestedFeedCategory(
             url = "https://techcrunch.com/feed/",
             description = "Startups, technology news, and product launches",
             logoUrl = "https://www.google.com/s2/favicons?domain=techcrunch.com&sz=64",
+        ),
+        SuggestedFeed(
+            name = "The Hindu - Technology",
+            url = "https://www.thehindu.com/sci-tech/technology/feeder/default.rss",
+            description = "Tech news, cybersecurity, and gadget updates",
+            logoUrl = "https://www.google.com/s2/favicons?domain=thehindu.com&sz=64",
+        ),
+        SuggestedFeed(
+            name = "The Indian Express - Technology",
+            url = "https://indianexpress.com/section/technology/feed/",
+            description = "Tech news, mobile devices, and digital trends from India",
+            logoUrl = "https://www.google.com/s2/favicons?domain=indianexpress.com&sz=64",
         ),
         SuggestedFeed(
             name = "The Register",

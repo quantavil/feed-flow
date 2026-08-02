@@ -99,6 +99,12 @@ internal val lifestyleFeeds = SuggestedFeedCategory(
             logoUrl = "https://www.google.com/s2/favicons?domain=newyorker.com&sz=64",
         ),
         SuggestedFeed(
+            name = "The Indian Express - Lifestyle & Health",
+            url = "https://indianexpress.com/section/lifestyle/feed/",
+            description = "Health, travel, food, and culture from India",
+            logoUrl = "https://www.google.com/s2/favicons?domain=indianexpress.com&sz=64",
+        ),
+        SuggestedFeed(
             name = "The Points Guy",
             url = "https://thepointsguy.com/feed/",
             description = "Travel rewards and tips",

@@ -14,6 +14,8 @@ import com.prof18.feedflow.database.DatabaseHelper
 import com.prof18.feedflow.feedsync.database.data.SyncedDatabaseHelper
 import com.prof18.feedflow.feedsync.database.di.FEED_SYNC_SCOPE_NAME
 import com.prof18.feedflow.feedsync.database.di.SYNC_DB_DRIVER
+import com.prof18.feedflow.shared.data.ApiKeyStorage
+import com.prof18.feedflow.shared.data.NoOpApiKeyStorage
 import com.prof18.feedflow.shared.di.getAllModulesModules
 import com.prof18.feedflow.shared.domain.BackgroundSyncScheduler
 import com.prof18.feedflow.shared.domain.HtmlRetriever
@@ -146,6 +148,9 @@ object TestModules {
         single<BackgroundSyncScheduler> {
             BackgroundSyncScheduler { }
         }
+        // The Android platform module binds this to the Keystore-backed implementation, which
+        // needs a Context the host-side test run has no way to supply.
+        single<ApiKeyStorage> { NoOpApiKeyStorage() }
     }
 }
 

@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.compose.multiplatform)
     alias(libs.plugins.compose.compiler)
     alias(libs.plugins.feedflow.library)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 kotlin {
@@ -23,12 +24,16 @@ kotlin {
                 implementation(libs.kotlinx.date.time)
                 implementation(libs.com.prof18.rss.parser)
                 implementation(libs.ktor.http)
+                implementation(libs.ktor.client.core)
+                implementation(libs.kotlinx.serialization.json)
             }
         }
 
         commonTest {
             dependencies {
                 implementation(libs.kotlin.test)
+                implementation(libs.kotlinx.coroutines.test)
+                implementation(libs.ktor.client.mock)
             }
         }
 

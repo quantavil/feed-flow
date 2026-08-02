@@ -74,6 +74,8 @@ class SearchViewModel internal constructor(
             isHideUnreadDotEnabled = hideUnreadDot,
             isHideFeedSourceEnabled = hideFeedSource,
             descriptionLineLimit = descriptionLineLimit,
+            // isRelevanceSortActive stays false on purpose: search resolves mark above/below by
+            // position in its own result list, not by date, so the sort order does not affect it.
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, FeedItemDisplaySettings())
 

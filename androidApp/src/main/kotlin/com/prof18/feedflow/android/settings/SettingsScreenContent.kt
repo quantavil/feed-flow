@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.LocalLibrary
@@ -43,7 +44,10 @@ internal fun SettingsScreenContent(
     navigateToSyncAndStorage: () -> Unit,
     navigateToWidgetSettings: () -> Unit,
     navigateToAboutAndSupport: () -> Unit,
+    navigateToAiSettings: () -> Unit,
     showWidgetSettings: Boolean,
+    isAiKeySet: Boolean = false,
+    isAiEnabled: Boolean = false,
 ) {
     Scaffold(
         topBar = {
@@ -114,6 +118,20 @@ internal fun SettingsScreenContent(
 
             item {
                 SettingItem(
+                    modifier = Modifier.testTag(SettingsE2eIds.AI_ROW),
+                    title = LocalFeedFlowStrings.current.settingsAiTitle,
+                    icon = Icons.Outlined.AutoAwesome,
+                    subtitle = when {
+                        !isAiEnabled -> LocalFeedFlowStrings.current.settingsAiDisabled
+                        isAiKeySet -> LocalFeedFlowStrings.current.settingsAiKeySet
+                        else -> LocalFeedFlowStrings.current.settingsAiKeyNotSet
+                    },
+                    onClick = navigateToAiSettings,
+                )
+            }
+
+            item {
+                SettingItem(
                     title = LocalFeedFlowStrings.current.settingsAboutAndSupport,
                     icon = Icons.Outlined.Info,
                     onClick = navigateToAboutAndSupport,
@@ -176,6 +194,7 @@ private fun SettingsScreenPreview() {
             navigateToFeedListSettings = {},
             navigateToReadingBehavior = {},
             navigateToSyncAndStorage = {},
+            navigateToAiSettings = {},
             navigateToWidgetSettings = {},
             navigateToAboutAndSupport = {},
             showWidgetSettings = true,

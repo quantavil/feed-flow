@@ -52,6 +52,7 @@ import com.prof18.feedflow.android.settings.SettingsScreen
 import com.prof18.feedflow.android.settings.about.AboutAndSupportScreen
 import com.prof18.feedflow.android.settings.about.subpages.AboutScreen
 import com.prof18.feedflow.android.settings.about.subpages.LicensesScreen
+import com.prof18.feedflow.android.settings.ai.AiSettingsScreen
 import com.prof18.feedflow.android.settings.appearance.AppearanceScreen
 import com.prof18.feedflow.android.settings.feedlist.FeedListSettingsScreen
 import com.prof18.feedflow.android.settings.feedsandaccounts.FeedsAndAccountsScreen
@@ -295,6 +296,13 @@ class MainActivity : BaseThemeActivity() {
                         navigateToWidgetSettings = { backStack.add(WidgetSettings) },
                         navigateToAppearance = { backStack.add(Appearance) },
                         navigateToAboutAndSupport = { backStack.add(AboutAndSupport) },
+                        navigateToAiSettings = { backStack.add(AiSettings) },
+                    )
+                }
+
+                entry<AiSettings> {
+                    AiSettingsScreen(
+                        navigateBack = navigateBack,
                     )
                 }
 

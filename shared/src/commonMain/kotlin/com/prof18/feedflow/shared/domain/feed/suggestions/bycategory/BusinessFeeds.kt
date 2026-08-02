@@ -27,10 +27,28 @@ internal val businessFeeds = SuggestedFeedCategory(
             logoUrl = "https://www.google.com/s2/favicons?domain=fortune.com&sz=64",
         ),
         SuggestedFeed(
+            name = "Livemint",
+            url = "https://www.livemint.com/rss/news",
+            description = "Indian financial markets, business, and economy",
+            logoUrl = "https://www.google.com/s2/favicons?domain=livemint.com&sz=64",
+        ),
+        SuggestedFeed(
             name = "Not Boring",
             url = "https://www.notboring.co/feed",
             description = "Business strategy newsletter",
             logoUrl = "https://www.google.com/s2/favicons?domain=notboring.co&sz=64",
+        ),
+        SuggestedFeed(
+            name = "The Hindu - Business",
+            url = "https://www.thehindu.com/business/feeder/default.rss",
+            description = "Indian corporate news, economy, and markets",
+            logoUrl = "https://www.google.com/s2/favicons?domain=thehindu.com&sz=64",
+        ),
+        SuggestedFeed(
+            name = "The Indian Express - Business",
+            url = "https://indianexpress.com/section/business/feed/",
+            description = "Indian business, economy, and financial policy",
+            logoUrl = "https://www.google.com/s2/favicons?domain=indianexpress.com&sz=64",
         ),
         SuggestedFeed(
             name = "TIME Business",

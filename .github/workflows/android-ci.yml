@@ -1,0 +1,111 @@
+name: Android CI
+
+on:
+  # CI runs on every push; release publishing is gated separately below so feature branches
+  # with signing secrets cannot clobber the version.properties tag.
+  push:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  android-ci:
+    name: Build Android App & Run Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: write
+    env:
+      KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup environment
+        uses: ./.github/actions/setup-gradle
+        with:
+          gradle-cache-encryption-key: ${{ secrets.GRADLE_CACHE_ENCRYPTION_KEY }}
+
+      - name: Refresh translations
+        run: bash .scripts/refresh-translations.sh
+
+      - name: Create dummy Firebase json
+        run: |
+          cp config/dummy-google-services.json androidApp/src/debug/google-services.json
+          cp config/dummy-google-services.json androidApp/src/release/google-services.json
+
+      # allTests, not :core:allTests: the shared module holds the repository and mapper tests,
+      # and a :core-only run reports green while they are broken.
+      - name: Run Detekt and Unit Tests
+        run: ./gradlew detekt allTests
+
+      - name: Build Android App
+        run: ./gradlew :androidApp:assembleGooglePlayDebug
+
+      - name: Upload Debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: feedflow-ai-debug
+          path: androidApp/build/outputs/apk/googlePlay/debug/*.apk
+
+      # Everything below only runs once the signing secrets exist. Without them the release
+      # variant cannot be signed, so it is skipped rather than failing the whole build.
+      - name: Report missing signing secrets
+        if: env.KEYSTORE_BASE64 == ''
+        run: |
+          echo "::warning title=Release skipped::KEYSTORE_BASE64 is not set. Add the signing secrets to publish a signed release APK."
+
+      # Release only from main or an explicit v* tag. Any other ref still builds debug + tests.
+      - name: Decode signing keystore
+        if: env.KEYSTORE_BASE64 != '' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+        env:
+          # Passed as environment rather than interpolated into the script, so a password
+          # containing shell metacharacters cannot break out of the heredoc.
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.jks"
+          cat >> keystore.properties <<EOF
+          storeFile=$RUNNER_TEMP/release.jks
+          storePassword=$KEYSTORE_PASSWORD
+          keyAlias=$KEY_ALIAS
+          keyPassword=$KEY_PASSWORD
+          EOF
+
+      - name: Build signed release APK
+        if: env.KEYSTORE_BASE64 != '' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+        run: ./gradlew :androidApp:assembleGooglePlayRelease
+
+      - name: Read app version
+        if: env.KEYSTORE_BASE64 != '' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+        id: version
+        run: |
+          . ./version.properties
+          echo "tag=v$MAJOR.$MINOR.$PATCH" >> "$GITHUB_OUTPUT"
+
+      - name: Publish release
+        if: env.KEYSTORE_BASE64 != '' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          APK=$(ls androidApp/build/outputs/apk/googlePlay/release/*.apk | head -1)
+          cp "$APK" "feedflow-$TAG.apk"
+          NOTES="Signed Android release built from \`$GITHUB_REF_NAME\` (run $GITHUB_RUN_NUMBER, commit $GITHUB_SHA)."
+          # Re-pushing the same version overwrites the APK, so the notes have to be rewritten too.
+          # Without the edit they keep naming the commit that first created the tag, which is the
+          # wrong one, and the release page keeps showing the original publish date.
+          gh release create "$TAG" "feedflow-$TAG.apk" --title "FeedFlow $TAG" --notes "$NOTES" \
+            || {
+              gh release upload "$TAG" "feedflow-$TAG.apk" --clobber &&
+                gh release edit "$TAG" --notes "$NOTES"
+            }
+
+      - name: Clean up keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.jks" keystore.properties

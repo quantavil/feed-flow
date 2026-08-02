@@ -67,5 +67,6 @@ internal fun SelectFeeds.toFeedItem(
         isRead = is_read,
         commentsUrl = comments_url?.let { sanitizeUrl(it) },
         isBookmarked = is_bookmarked,
+        relevanceScore = relevance_score?.toInt(),
     )
 }

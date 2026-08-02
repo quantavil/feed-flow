@@ -7,6 +7,8 @@ import co.touchlab.kermit.platformLogWriter
 import com.prof18.feedflow.core.domain.HtmlParser
 import com.prof18.feedflow.core.utils.AppEnvironment
 import com.prof18.feedflow.database.createDatabaseDriver
+import com.prof18.feedflow.shared.data.AndroidEncryptedApiKeyStorage
+import com.prof18.feedflow.shared.data.ApiKeyStorage
 import com.prof18.feedflow.shared.data.WidgetSettingsRepository
 import com.prof18.feedflow.shared.domain.AppForegroundState
 import com.prof18.feedflow.shared.domain.BackgroundSyncScheduler
@@ -84,6 +86,10 @@ internal actual fun getPlatformModule(appEnvironment: AppEnvironment): Module = 
     single<Settings> {
         val sharedPrefs = get<Context>().getSharedPreferences("feedflow.shared.pref", Context.MODE_PRIVATE)
         SharedPreferencesSettings(sharedPrefs)
+    }
+
+    single<ApiKeyStorage> {
+        AndroidEncryptedApiKeyStorage(get(), getWith("ApiKeyStorage"))
     }
 
     single {

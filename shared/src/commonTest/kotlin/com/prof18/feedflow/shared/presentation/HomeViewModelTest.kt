@@ -4,6 +4,7 @@ import app.cash.turbine.test
 import com.prof18.feedflow.core.domain.FeedSourceLogoRetriever
 import com.prof18.feedflow.core.domain.HtmlParser
 import com.prof18.feedflow.core.domain.ParsedFeedContent
+import com.prof18.feedflow.core.model.ArticleAiService
 import com.prof18.feedflow.core.model.ArticleOpenMode
 import com.prof18.feedflow.core.model.CategoryId
 import com.prof18.feedflow.core.model.CategoryName
@@ -18,6 +19,8 @@ import com.prof18.feedflow.core.model.StartedFeedUpdateStatus
 import com.prof18.feedflow.core.model.ThemeMode
 import com.prof18.feedflow.core.model.VisibleFeedItem
 import com.prof18.feedflow.database.DatabaseHelper
+import com.prof18.feedflow.shared.data.AiSettingsRepository
+import com.prof18.feedflow.shared.data.ApiKeyStorage
 import com.prof18.feedflow.shared.data.SettingsRepository
 import com.prof18.feedflow.shared.domain.feed.FeedStateRepository
 import com.prof18.feedflow.shared.domain.feed.RssParserWrapper
@@ -34,6 +37,7 @@ import com.prof18.feedflow.shared.test.generators.RssItemGenerator
 import com.prof18.feedflow.shared.test.toParsedFeedSource
 import com.prof18.rssparser.model.RssChannel
 import com.prof18.rssparser.model.RssItem
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
@@ -58,13 +62,19 @@ class HomeViewModelTest : KoinTestBase() {
     private val settingsRepository: SettingsRepository by inject()
     private val feedStateRepository: FeedStateRepository by inject()
 
+    private val aiSettingsRepository: AiSettingsRepository by inject()
+
     private val fakeRssParser = FakeRssParserWrapper()
     private val fakeLogoRetriever = FakeFeedSourceLogoRetriever()
+    private val gatedAiService = GatedArticleAiService()
 
     override fun getTestModules(): List<Module> = super.getTestModules() + module {
         single<RssParserWrapper> { fakeRssParser }
         factory<FeedSourceLogoRetriever> { fakeLogoRetriever }
         single<HtmlParser> { FakeHtmlParser() }
+        // Harmless for every other test: AI is off by default, so scoring never reaches this.
+        single<ApiKeyStorage> { FakeApiKeyStorage() }
+        single<ArticleAiService> { gatedAiService }
     }
 
     @Test
@@ -1828,6 +1838,41 @@ class HomeViewModelTest : KoinTestBase() {
         }
     }
 
+    @Test
+    fun `a page requested while ranking is loaded once the ranked list is published`() = runTest(testDispatcher) {
+        val feedSource = createFeedSource(id = "source-1", title = "Source 1")
+        insertFeedSources(feedSource)
+        val items = (1..80).map { index ->
+            buildFeedItem(
+                id = "item-$index",
+                title = "Item $index",
+                pubDateMillis = 1000L + index,
+                source = feedSource,
+            )
+        }
+        databaseHelper.insertFeedItems(items, lastSyncTimestamp = 0)
+        aiSettingsRepository.setAiEnabled(true)
+
+        val viewModel = getViewModel()
+        advanceUntilIdle()
+        assertEquals(40, viewModel.feedState.value.size)
+
+        viewModel.updateFeedOrder(FeedOrder.MOST_RELEVANT)
+        advanceUntilIdle()
+        assertTrue(viewModel.isRankingArticles.value)
+
+        // The list view only asks for a page when its "near the end" flag flips, so a page
+        // dropped here is never asked for again and infinite scroll stays dead.
+        viewModel.requestNewFeedsPage()
+        advanceUntilIdle()
+        assertEquals(40, viewModel.feedState.value.size)
+
+        gatedAiService.release()
+        advanceUntilIdle()
+
+        assertEquals(80, viewModel.feedState.value.size)
+    }
+
     private fun getViewModel(): HomeViewModel = get()
 
     private suspend fun insertFeedSources(vararg sources: FeedSource) {
@@ -1921,5 +1966,22 @@ class HomeViewModelTest : KoinTestBase() {
         override fun getRssUrl(html: String): String? = null
         override fun parseFeedContent(html: String, baseUrl: String?): ParsedFeedContent =
             ParsedFeedContent(text = html, commentsUrl = null)
+    }
+
+    private class FakeApiKeyStorage : ApiKeyStorage {
+        override fun getApiKey(): String = "key"
+        override fun setApiKey(key: String): Boolean = true
+    }
+
+    /** Holds a scoring run open so the test can act while [HomeViewModel.isRankingArticles] is true. */
+    private class GatedArticleAiService : ArticleAiService {
+        private val gate = CompletableDeferred<Unit>()
+
+        fun release() = gate.complete(Unit)
+
+        override suspend fun complete(systemPrompt: String, input: String, responseSchema: String?): String {
+            gate.await()
+            return "[]"
+        }
     }
 }

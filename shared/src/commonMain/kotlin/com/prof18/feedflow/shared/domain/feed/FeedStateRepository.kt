@@ -5,9 +5,9 @@ import com.prof18.feedflow.core.domain.DateFormatter
 import com.prof18.feedflow.core.model.FeedFilter
 import com.prof18.feedflow.core.model.FeedItem
 import com.prof18.feedflow.core.model.FeedItemId
-import com.prof18.feedflow.core.model.FeedOrder
 import com.prof18.feedflow.core.model.FeedUpdateStatus
 import com.prof18.feedflow.core.model.FinishedFeedUpdateStatus
+import com.prof18.feedflow.core.model.NEUTRAL_RELEVANCE_SCORE
 import com.prof18.feedflow.database.DatabaseHelper
 import com.prof18.feedflow.db.SelectFeeds
 import com.prof18.feedflow.shared.data.FeedAppearanceSettingsRepository
@@ -58,6 +58,7 @@ internal class FeedStateRepository(
 
     private var lastFetchedPubDate: Long? = null
     private var lastFetchedUrlHash: String? = null
+    private var lastFetchedRelevanceScore: Long = NEUTRAL_RELEVANCE_SCORE.toLong()
     private var hasMorePages: Boolean = true
     private var isLoadingMore: Boolean = false
 
@@ -104,7 +105,10 @@ internal class FeedStateRepository(
                     feedFilter = feedFilter,
                     pageSize = FEED_DB_PAGE_SIZE,
                     showReadItems = settingsRepository.getShowReadArticlesTimeline(),
-                    sortOrder = FeedOrder.NEWEST_FIRST,
+                    // Must match the order the visible list is in: counting a date-ordered page
+                    // against a relevance-ordered list reports articles as new that are simply
+                    // further down the screen.
+                    sortOrder = feedAppearanceSettingsRepository.getFeedOrder(),
                 )
             }
             if (currentFeedFilterMutableState.value != feedFilter || mutableFeedListVersion.value != feedListVersion) {
@@ -133,6 +137,7 @@ internal class FeedStateRepository(
                     sortOrder = feedOrder,
                     lastPubDate = lastFetchedPubDate,
                     lastUrlHash = lastFetchedUrlHash,
+                    lastRelevanceScore = lastFetchedRelevanceScore,
                 )
             }
             updateCursor(feeds)
@@ -162,6 +167,9 @@ internal class FeedStateRepository(
         val lastRow = fetchedRows.lastOrNull()
         lastFetchedPubDate = lastRow?.pub_date
         lastFetchedUrlHash = lastRow?.url_hash
+        // Must match the COALESCE default in selectFeeds, or the relevance cursor lands on a
+        // score no row actually sorts by and the next page starts in the wrong band.
+        lastFetchedRelevanceScore = lastRow?.relevance_score ?: NEUTRAL_RELEVANCE_SCORE.toLong()
     }
 
     suspend fun updateFeedFilter(feedFilter: FeedFilter) {

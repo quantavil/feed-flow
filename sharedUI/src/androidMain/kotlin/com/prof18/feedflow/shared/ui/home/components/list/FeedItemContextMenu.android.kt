@@ -45,6 +45,7 @@ internal actual fun FeedItemContextMenu(
     onOpenFeedWebsite: (String) -> Unit,
     onMarkAllAboveAsRead: (String) -> Unit,
     onMarkAllBelowAsRead: (String) -> Unit,
+    canMarkAboveOrBelowAsRead: Boolean,
 ) {
     DropdownMenu(
         expanded = showMenu,
@@ -79,19 +80,23 @@ internal actual fun FeedItemContextMenu(
 
         HorizontalDivider()
 
-        MarkAllAboveAsReadMenuItem(
-            feedItem = feedItem,
-            onMarkAllAboveAsRead = onMarkAllAboveAsRead,
-            closeMenu = closeMenu,
-        )
+        // "Above" and "below" are resolved by publication date, so they only match what the user
+        // sees while the list is date-ordered.
+        if (canMarkAboveOrBelowAsRead) {
+            MarkAllAboveAsReadMenuItem(
+                feedItem = feedItem,
+                onMarkAllAboveAsRead = onMarkAllAboveAsRead,
+                closeMenu = closeMenu,
+            )
 
-        MarkAllBelowAsReadMenuItem(
-            feedItem = feedItem,
-            onMarkAllBelowAsRead = onMarkAllBelowAsRead,
-            closeMenu = closeMenu,
-        )
+            MarkAllBelowAsReadMenuItem(
+                feedItem = feedItem,
+                onMarkAllBelowAsRead = onMarkAllBelowAsRead,
+                closeMenu = closeMenu,
+            )
 
-        HorizontalDivider()
+            HorizontalDivider()
+        }
 
         if (feedItem.commentsUrl != null) {
             ShareCommentsMenuItem(

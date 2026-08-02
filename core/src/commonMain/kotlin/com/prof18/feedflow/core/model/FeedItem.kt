@@ -17,5 +17,6 @@ data class FeedItem(
     val dateString: String?,
     val commentsUrl: String?,
     val isBookmarked: Boolean,
+    val relevanceScore: Int? = null,
     val contentDirection: ContentDirection? = null,
 )
